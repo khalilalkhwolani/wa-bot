@@ -255,6 +255,21 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 			participantJid = msg.key.remoteJid
 		}
 
+		// محاولة فك معرّف LID إلى رقم الجوال الحقيقي باستخدام قاعدة بيانات الجلسة
+		if (participantJid && participantJid.includes('@lid')) {
+			try {
+				const lidUser = participantJid.split('@')[0].split(':')[0]
+				const stored = await sock.authState.keys.get('lid-mapping', [`${lidUser}_reverse`])
+				const pnUser = stored?.[`${lidUser}_reverse`]
+				if (pnUser && typeof pnUser === 'string') {
+					participantJid = pnUser.includes('@') ? pnUser : `${pnUser}@s.whatsapp.net`
+					logger.info(`✅ [${sessionId}] تم فك معرّف LID بنجاح إلى الرقم: ${participantJid}`)
+				}
+			} catch (err) {
+				logger.warn(`⚠️ [${sessionId}] فشل فك معرّف LID: ${err}`)
+			}
+		}
+
 		let isLid = false
 		let phone = ''
 		let chatLink = ''
@@ -274,18 +289,23 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 
 		let originalGroup = 'مجموعة عامة'
 		let groupLink = ''
+		let groupDeepLink = ''
 		if (msg.key.remoteJid && msg.key.remoteJid.endsWith('@g.us')) {
+			groupDeepLink = `whatsapp://chat?jid=${msg.key.remoteJid}`
 			try {
 				const meta = await sock.groupMetadata(msg.key.remoteJid)
 				originalGroup = meta.subject || 'مجموعة عامة'
+			} catch {
+				originalGroup = 'مجموعة واتساب'
+			}
 
-				// محاولة توليد رابط الجروب الأصلي للانتقال السريع
+			try {
 				const code = await sock.groupInviteCode(msg.key.remoteJid)
 				if (code) {
 					groupLink = `https://chat.whatsapp.com/${code}`
 				}
 			} catch {
-				originalGroup = 'مجموعة واتساب'
+				// البوت ليس مشرفاً، طبيعي
 			}
 		}
 
@@ -317,7 +337,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 "${text}"
 ${quotedText ? `\n💬 *رد على رسالة:* "${quotedText}"` : ''}
 
-${groupLink ? `👥 *رابط المجموعة المصدر للوصول للرسالة:*\n${groupLink}\n` : ''}
+${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة (للجوال والكمبيوتر):*\n${groupDeepLink}\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
 ${chatLink}`
 
