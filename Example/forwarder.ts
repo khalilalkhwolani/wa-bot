@@ -12,6 +12,7 @@ import fs from 'fs'
 import path from 'path'
 import PQueue from 'p-queue'
 import http from 'http'
+import { handleStudentLeads } from './student_leads'
 
 // إعداد مستوى سجلات Pino ليكون نظيفاً ومقروءاً في الكونسول
 const logger = P({
@@ -175,6 +176,11 @@ async function startSession(sessionId: string) {
 
 			// تجاهل رسائل النشرات (Newsletters)
 			if (msg.key.remoteJid && isJidNewsletter(msg.key.remoteJid)) continue
+
+			// تشغيل نظام معالجة وتوجيه طلبات مساعدة الطلاب (ملف مستقل)
+			handleStudentLeads(msg, sock, sessionId).catch(err => {
+				logger.error(`❌ خطأ أثناء معالجة طلبات الطلاب للحساب [${sessionId}]: ${err}`)
+			})
 
 			// تجاهل الرسائل القادمة من مجموعة التوجيه نفسها لتجنب التكرار
 			if (targetGroupJid && msg.key.remoteJid === targetGroupJid) continue
