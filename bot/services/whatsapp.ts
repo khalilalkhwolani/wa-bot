@@ -321,23 +321,17 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 			confidence: analysis.confidence
 		})
 
-		// صياغة الرسالة التنبيهية
-		const alertMessage = `🚨 *طلب مساعدة من طالب (Lead)*
+		// صياغة الرسالة التنبيهية المبسطة والأنيقة
+		const alertMessage = `📝 *طلب مساعدة جديد (Lead)*
 
-👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 👥 *المجموعة المصدر:* ${savedLead.originalGroup}
-📚 *المادة:* ${savedLead.subject}
-🗂️ *التصنيف:* ${analysis.category || 'غير محدد'}
-🔥 *الأهمية:* ${analysis.urgency === 'High' ? '🔴 عالية جداً' : analysis.urgency === 'Medium' ? '🟡 متوسطة' : '⚪ منخفضة'}
-💡 *التحليل:* ${analysis.reason}
-📈 *درجة الجودة:* ${savedLead.score}/100 (ثقة الـ AI: ${savedLead.confidence})
-🆔 *معرف الطلب:* ${savedLead.id}
+👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 
 💬 *الرسالة الأصلية:*
 "${text}"
 ${quotedText ? `\n💬 *رد على رسالة:* "${quotedText}"` : ''}
 
-${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة (للجوال والكمبيوتر):*\n${groupDeepLink}\n` : ''}
+${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة:* ${groupDeepLink}\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
 ${chatLink}`
 
