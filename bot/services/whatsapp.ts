@@ -249,8 +249,17 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 			return
 		}
 
-		// استخراج بيانات الطالب والمجموعة الأصلية
-		const participantJid = msg.key.participant || msg.key.remoteJid || ''
+		// استخراج رقم هاتف الطالب وصياغة رابط التواصل
+		let participantJid = msg.key.participant || ''
+		if (!participantJid && msg.key.remoteJid && !msg.key.remoteJid.endsWith('@g.us')) {
+			participantJid = msg.key.remoteJid
+		}
+
+		if (!participantJid || participantJid.endsWith('@g.us')) {
+			logger.warn(`⚠️ [${sessionId}] تجاهل الرسالة لتعذر استخراج رقم جوال فردي للمرسل.`)
+			return
+		}
+
 		const phone = participantJid.split('@')[0]
 		const chatLink = `https://wa.me/${phone}`
 
