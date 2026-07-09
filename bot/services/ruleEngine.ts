@@ -13,7 +13,8 @@ const AD_KEYWORDS = [
 	'خدمات طلابيه', 'خدمات اكاديميه', 'نوفر لكم', 'نقدم لكم', 'مستعدون', 
 	'اسعار مناسبه', 'حلول مضمونه', 'شعارنا الامانه', 'مكتبه', 'أعذار طبيه', 
 	'اعذار طبيه', 'كادر', 'للتواصل عبر', 'للتواصل واتساب', 'للتواصل خاص',
-	'بحوث علميه', 'عروض بوربوينت'
+	'بحوث علميه', 'عروض بوربوينت', 'سكليف', 'تنويم', 'تقرير طبي', 'تقارير طبيه',
+	'كشف طبي', 'سيره ذاتيه', 'بحوثات', 'مشاريع تخرج', 'برزنتيشن', 'تلخيص كتب'
 ].map(normalizeArabicSearch)
 
 // الكلمات المفتاحية المحظورة للروابط (سبام وإعلانات الخدمات العامة)
@@ -46,13 +47,29 @@ export function shouldAnalyzeStudentLead(text: string): boolean {
 		return false
 	}
 
-	// 4. كشف وحظر القوائم النقطية المتعددة (إعلان قائمة خدمات طلابية)
+	// 4. كشف وحظر القوائم النقطية أو الأسطر التي تبدأ برموز تعبيرية (إعلان الكتالوجات)
+	const lines = text.split('\n')
+	let symbolLines = 0
+	for (const line of lines) {
+		const trimmed = line.trim()
+		if (trimmed) {
+			// التحقق من بدء السطر برمز تعبيري أو مؤشر قائمة
+			if (/^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
+				symbolLines++
+			}
+		}
+	}
+	if (symbolLines >= 3) {
+		return false
+	}
+
+	// 5. كشف وحظر القوائم النقطية العامة
 	const bulletPoints = (text.match(/[♦️🔹🔸📌✅•\-*]/g) || []).length
 	if (bulletPoints >= 3) {
 		return false
 	}
 
-	// 5. كشف وحظر العبارات الإعلانية الشهيرة
+	// 6. كشف وحظر العبارات الإعلانية الشهيرة
 	const isAd = AD_KEYWORDS.some(keyword => normalizedText.includes(keyword))
 	if (isAd) {
 		return false
