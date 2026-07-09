@@ -250,24 +250,40 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 		}
 
 		// استخراج رقم هاتف الطالب وصياغة رابط التواصل
-		let participantJid = msg.key.participant || ''
+		let participantJid = msg.key.participantAlt || msg.key.participant || ''
 		if (!participantJid && msg.key.remoteJid && !msg.key.remoteJid.endsWith('@g.us')) {
 			participantJid = msg.key.remoteJid
 		}
 
-		if (!participantJid || participantJid.endsWith('@g.us')) {
-			logger.warn(`⚠️ [${sessionId}] تجاهل الرسالة لتعذر استخراج رقم جوال فردي للمرسل.`)
-			return
+		let isLid = false
+		let phone = ''
+		let chatLink = ''
+
+		if (participantJid) {
+			if (participantJid.includes('@lid')) {
+				isLid = true
+				phone = participantJid.split('@')[0].split(':')[0]
+				chatLink = '🔒 (رقم مخفي بسبب إعدادات الخصوصية في مجتمعات واتساب)'
+			} else {
+				phone = participantJid.split('@')[0].split(':')[0]
+				chatLink = `https://wa.me/${phone}`
+			}
+		} else {
+			chatLink = '⚠️ (تعذر استخراج رقم الهاتف)'
 		}
 
-		const phone = participantJid.split('@')[0]
-		const chatLink = `https://wa.me/${phone}`
-
 		let originalGroup = 'مجموعة عامة'
+		let groupLink = ''
 		if (msg.key.remoteJid && msg.key.remoteJid.endsWith('@g.us')) {
 			try {
 				const meta = await sock.groupMetadata(msg.key.remoteJid)
 				originalGroup = meta.subject || 'مجموعة عامة'
+
+				// محاولة توليد رابط الجروب الأصلي للانتقال السريع
+				const code = await sock.groupInviteCode(msg.key.remoteJid)
+				if (code) {
+					groupLink = `https://chat.whatsapp.com/${code}`
+				}
 			} catch {
 				originalGroup = 'مجموعة واتساب'
 			}
@@ -275,7 +291,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 
 		// 5. حفظ الفرصة في قاعدة البيانات المحلية (Persistence)
 		const savedLead = await db.insertLead({
-			studentPhone: phone,
+			studentPhone: phone || 'غير معروف',
 			studentName: msg.pushName || 'غير مسجل',
 			originalGroup,
 			messageContent: text,
@@ -288,7 +304,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 		// صياغة الرسالة التنبيهية
 		const alertMessage = `🚨 *طلب مساعدة من طالب (Lead)*
 
-👤 *الطالب:* ${savedLead.studentName} (@${savedLead.studentPhone})
+👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 👥 *المجموعة المصدر:* ${savedLead.originalGroup}
 📚 *المادة:* ${savedLead.subject}
 🗂️ *التصنيف:* ${analysis.category || 'غير محدد'}
@@ -301,6 +317,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 "${text}"
 ${quotedText ? `\n💬 *رد على رسالة:* "${quotedText}"` : ''}
 
+${groupLink ? `👥 *رابط المجموعة المصدر للوصول للرسالة:*\n${groupLink}\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
 ${chatLink}`
 
