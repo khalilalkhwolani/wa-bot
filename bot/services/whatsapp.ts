@@ -152,11 +152,11 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 			const subject = groups[jid].subject
 			const subjectNorm = normalizeArabic(subject)
 
-			if (subject === config.TARGET_LINKS_GROUP || subjectNorm === linksNorm || subjectNorm.includes('العمل')) {
+			if (subject === config.TARGET_LINKS_GROUP || subjectNorm === linksNorm) {
 				sessionLinksGroupJids.set(sessionId, jid)
 				logger.info(`✅ تم العثور على مجموعة الروابط: "${subject}" بالمعرف: ${jid}`)
 			}
-			if (subject === config.TARGET_LEADS_GROUP || subjectNorm === leadsNorm || subjectNorm.includes('طلاب') || subjectNorm.includes('طلب')) {
+			if (subject === config.TARGET_LEADS_GROUP || subjectNorm === leadsNorm) {
 				sessionLeadsGroupJids.set(sessionId, jid)
 				logger.info(`✅ تم العثور على مجموعة الطلاب: "${subject}" بالمعرف: ${jid}`)
 			}
