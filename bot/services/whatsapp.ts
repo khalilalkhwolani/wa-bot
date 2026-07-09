@@ -76,8 +76,8 @@ export async function startWhatsAppSession(sessionId: string) {
 			const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 			logger.error(`❌ انقطع الاتصال للحساب [${sessionId}]. السبب: ${lastDisconnect?.error}`)
 			if (shouldReconnect) {
-				logger.info(`🔄 جاري إعادة الاتصال للحساب [${sessionId}]...`)
-				startWhatsAppSession(sessionId)
+				logger.info(`🔄 جاري إعادة الاتصال للحساب [${sessionId}] في غضون 5 ثوانٍ...`)
+				setTimeout(() => startWhatsAppSession(sessionId), 5000)
 			} else {
 				logger.fatal(`🚨 تم تسجيل الخروج للحساب [${sessionId}]. يرجى مسح المجلد "${authFolder}" وإعادة التشغيل.`)
 			}
