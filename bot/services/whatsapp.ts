@@ -33,6 +33,9 @@ const logger = P({
 const sessionLinksGroupJids = new Map<string, string>()
 const sessionLeadsGroupJids = new Map<string, string>()
 
+// وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
+const botStartupTime = Date.now()
+
 // خرائط طوابير الإرسال (Session ID -> PQueue)
 const sessionLinksQueues = new Map<string, PQueue>()
 const sessionLeadsQueues = new Map<string, PQueue>()
@@ -99,6 +102,12 @@ export async function startWhatsAppSession(sessionId: string) {
 		for (const msg of upsert.messages) {
 			if (msg.key.fromMe) continue
 			if (msg.key.remoteJid && isJidNewsletter(msg.key.remoteJid)) continue
+
+			// تجنب الرسائل القديمة أو التاريخية المرسلة قبل تشغيل البوت لمنع التكرار عند إعادة التشغيل
+			const msgTime = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
+			if (msgTime < botStartupTime - 15000) {
+				continue
+			}
 
 			// 1. معالجة تفاعلات المشرفين بالرموز للتغذية الراجعة (Reaction Feedback)
 			if (msg.message?.reactionMessage) {
