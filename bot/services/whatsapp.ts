@@ -147,8 +147,10 @@ export async function startWhatsAppSession(sessionId: string) {
 
 			// 3. معالجة طلبات مساعدة الطلاب عبر الأنبوب المعياري (SLIE Engine Pipeline)
 			if (text || quotedText) {
-				const participantJid = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
-				const phone = participantJid.split('@')[0].split(':')[0]
+				let participantJid = msg.key.participantAlt || msg.key.participant || ''
+				if (!participantJid && msg.key.remoteJid && !msg.key.remoteJid.endsWith('@g.us')) {
+					participantJid = msg.key.remoteJid
+				}
 
 				const sliemMsg: SLIEMessage = {
 					id: msg.key.id || '',
