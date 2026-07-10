@@ -367,7 +367,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 
 💬 *الرسالة الأصلية:*
 ${sliemMsg.text}
-${sliemMsg.quotedText ? `\n↪️ *الرسالة المقتبسة (التي تم الرد عليها):* "${sliemMsg.quotedText}"` : ''}`
+${sliemMsg.quotedText ? `\n↪️ *الرسالة المقتبسة (التي تم الرد عليها):* "${sliemMsg.quotedText}"` : ''}
 
 ${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupJid ? `🆔 *معرف المجموعة:* \`${groupJid}\`\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
