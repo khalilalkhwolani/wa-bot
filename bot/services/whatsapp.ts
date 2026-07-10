@@ -360,15 +360,14 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 		})
 
 		// 5. صياغة الرسالة التنبيهية التلقائية المبسطة
-		const formattedText = sliemMsg.text.startsWith('▫️') ? sliemMsg.text : `"${sliemMsg.text}"`
 		const alertMessage = `📝 *طلب مساعدة جديد (Lead)*
 
 👥 *المجموعة المصدر:* ${savedLead.originalGroup}
 👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 
 💬 *الرسالة الأصلية:*
-${formattedText}
-${sliemMsg.quotedText ? `\n💬 *رد على رسالة:* "${sliemMsg.quotedText}"` : ''}
+"${sliemMsg.text}"
+${sliemMsg.quotedText ? `\n↩️ *رد على رسالة:* "${sliemMsg.quotedText}"` : ''}`
 
 ${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة:* ${groupDeepLink}\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*

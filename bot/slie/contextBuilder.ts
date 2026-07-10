@@ -47,13 +47,13 @@ class ContextBuilder {
 		// استخدام أول رسالة كأساس للمرجع والخصائص
 		const base = messages[0];
 		
-		// دمج كافة نصوص الرسائل المتتالية بصيغة نقاط الدردشة المنفصلة
+		// دمج كافة نصوص الرسائل المتتالية بصيغة أسطر طبيعية منفصلة
 		let combinedText = '';
 		const trimmedTexts = messages.map(m => m.text.trim()).filter(t => t.length > 0);
 		if (trimmedTexts.length === 1) {
 			combinedText = trimmedTexts[0];
 		} else {
-			combinedText = trimmedTexts.map(t => `▫️ ${t}`).join('\n');
+			combinedText = trimmedTexts.join('\n');
 		}
 
 		// دمج الرسائل المقتبسة إن وجدت
