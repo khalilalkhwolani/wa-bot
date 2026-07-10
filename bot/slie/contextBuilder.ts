@@ -18,11 +18,19 @@ class ContextBuilder {
 			clearTimeout(existing.timer);
 			existing.messages.push(message);
 
-			const timer = setTimeout(() => {
-				this.flush(key, onFlush);
-			}, this.debounceMs);
+			const firstMsg = existing.messages[0];
+			const totalDuration = message.timestamp - firstMsg.timestamp;
 
-			this.buffers.set(key, { messages: existing.messages, timer });
+			// إذا تجاوز التجميع 4 رسائل أو مر أكثر من 30 ثانية على أول رسالة، نقوم بالإرسال فوراً
+			if (existing.messages.length >= 4 || totalDuration >= 30000) {
+				this.flush(key, onFlush);
+			} else {
+				const timer = setTimeout(() => {
+					this.flush(key, onFlush);
+				}, this.debounceMs);
+
+				this.buffers.set(key, { messages: existing.messages, timer });
+			}
 		} else {
 			const timer = setTimeout(() => {
 				this.flush(key, onFlush);
@@ -39,6 +47,8 @@ class ContextBuilder {
 		const data = this.buffers.get(key);
 		if (!data) return;
 
+		// مسح المؤقت لمنع الاستدعاء المزدوج في حال تم الإرسال الفوري يدوياً
+		clearTimeout(data.timer);
 		this.buffers.delete(key);
 
 		const messages = data.messages;
@@ -47,14 +57,15 @@ class ContextBuilder {
 		// استخدام أول رسالة كأساس للمرجع والخصائص
 		const base = messages[0];
 		
-		// دمج كافة نصوص الرسائل المتتالية بصيغة أسطر طبيعية منفصلة
-		let combinedText = '';
-		const trimmedTexts = messages.map(m => m.text.trim()).filter(t => t.length > 0);
-		if (trimmedTexts.length === 1) {
-			combinedText = trimmedTexts[0];
-		} else {
-			combinedText = trimmedTexts.join('\n');
-		}
+		// دمج كافة نصوص الرسائل المتتالية بصيغة أسطر مع تمييز الرسائل التي تحتوي على ردود
+		const formattedLines = messages.map(m => {
+			const text = m.text.trim();
+			if (!text) return '';
+			// إذا كانت هذه الرسالة عبارة عن رد على رسالة أخرى، نميزها بـ ↪️، وإلا بـ ▫️
+			return m.quotedText ? `↪️ ${text}` : `▫️ ${text}`;
+		}).filter(line => line.length > 0);
+		
+		const combinedText = formattedLines.join('\n');
 
 		// دمج الرسائل المقتبسة إن وجدت
 		const quotedTexts = messages.map(m => m.quotedText).filter(Boolean) as string[];

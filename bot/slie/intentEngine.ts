@@ -54,9 +54,9 @@ export function classifyIntentLocally(
 
 	let score = 0;
 
-	// 1. التحقق من التعبيرات الإيجابية
+	// 1. التحقق من التعبيرات الإيجابية (مع سقف أعلى بـ 60 نقطة لمنع التضخم التراكمي)
 	const matchedExpressions = helpExpressions.filter(word => normalizedText.includes(word));
-	score += matchedExpressions.length * 30;
+	score += Math.min(60, matchedExpressions.length * 30);
 
 	const matchedNouns = studyNouns.filter(word => normalizedText.includes(word));
 	const matchedVerbs = helpVerbs.filter(word => normalizedText.includes(word));
@@ -74,7 +74,19 @@ export function classifyIntentLocally(
 		score -= 35;
 	}
 
-	// 3. تصنيف النية بناءً على النتيجة النهائية للنقاط
+	// 3. خصم نقاط عقابي للضحك والدردشة الجانبية لتفادي تجاوز الذكاء الاصطناعي (AI Bypass)
+	const hasLaughter = /ه{3,}/.test(normalizedText) || normalizedText.includes('هههه') || normalizedText.includes('😂') || normalizedText.includes('🤣');
+	if (hasLaughter) {
+		score -= 40;
+	}
+
+	const chatWords = ['يا بنات', 'يا بنات القروب', 'حبيبتي', 'حبايب', 'ياخي', 'يا خي', 'صوصات', 'ابكي', 'أبكي', 'بموت', 'دموعي'].map(normalizeArabicText);
+	const matchedChat = chatWords.filter(word => normalizedText.includes(word));
+	if (matchedChat.length > 0) {
+		score -= Math.min(45, matchedChat.length * 15);
+	}
+
+	// 4. تصنيف النية بناءً على النتيجة النهائية للنقاط
 	let intent: IntentType = 'UNKNOWN';
 	if (score >= 25) {
 		intent = 'ASK_HELP';

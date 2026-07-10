@@ -173,8 +173,10 @@ export async function startWhatsAppSession(sessionId: string) {
 					rawMessage: msg
 				}
 
-				// معالجة الرسالة مباشرة لضمان الحصول على نص الطلب الصافي والدقيق دون دمج دردشة المجموعة
-				handleStudentLeadMessage(sock, sessionId, sliemMsg)
+				// استخدام محرك تجميع السياق (Context Builder) المطور للرسائل المتتالية
+				contextBuilder.addMessage(sliemMsg, (combinedMsg) => {
+					handleStudentLeadMessage(sock, sessionId, combinedMsg)
+				})
 			}
 		}
 	})
@@ -325,9 +327,9 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 
 		let originalGroup = 'مجموعة عامة'
 		let groupLink = ''
-		let groupDeepLink = ''
+		let groupJid = ''
 		if (sliemMsg.remoteJid && sliemMsg.remoteJid.endsWith('@g.us')) {
-			groupDeepLink = `whatsapp://chat?jid=${sliemMsg.remoteJid}`
+			groupJid = sliemMsg.remoteJid.replace('@', ' [at] ')
 			try {
 				const meta = await sock.groupMetadata(sliemMsg.remoteJid)
 				originalGroup = meta.subject || 'مجموعة عامة'
@@ -364,10 +366,10 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 
 💬 *الرسالة الأصلية:*
-"${sliemMsg.text}"
-${sliemMsg.quotedText ? `\n↩️ *رد على رسالة:* "${sliemMsg.quotedText}"` : ''}`
+${sliemMsg.text}
+${sliemMsg.quotedText ? `\n↪️ *الرسالة المقتبسة (التي تم الرد عليها):* "${sliemMsg.quotedText}"` : ''}`
 
-${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة:* ${groupDeepLink}\n` : ''}
+${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupJid ? `🆔 *معرف المجموعة:* \`${groupJid}\`\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
 ${chatLink}`
 

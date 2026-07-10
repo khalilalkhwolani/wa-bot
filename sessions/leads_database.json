@@ -360,7 +360,34 @@
       "score": 30,
       "confidence": 0.9,
       "id": "LD-1783718300579-50",
-      "createdAt": "2026-07-10T21:18:20.579Z"
+      "createdAt": "2026-07-10T21:18:20.579Z",
+      "sentMessageId": "3EB04F208F59A34BA88959"
+    },
+    {
+      "studentPhone": "966560086479",
+      "studentName": "جُمانه",
+      "originalGroup": "تدريب في الملك فهد لمتدربي",
+      "messageContent": "السلام عليكم\nتعرفون اذا الكود اللي شارحه المهندس موجود بالتلقرام ؟",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783719380885-201",
+      "createdAt": "2026-07-10T21:36:20.885Z",
+      "sentMessageId": "3EB0EFCB2BA805D14BCAAC"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "العمل",
+      "messageContent": "اشتي حل لغه عربي ؟",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783721583892-464",
+      "createdAt": "2026-07-10T22:13:03.892Z",
+      "sentMessageId": "3EB0F835729A0ADAC36036"
     }
   ],
   "behaviors": {
@@ -1227,6 +1254,111 @@
     },
     "966568630699": {
       "phone": "966568630699",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966599180405": {
+      "phone": "966599180405",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966534437736": {
+      "phone": "966534437736",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966594618561": {
+      "phone": "966594618561",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963935448445": {
+      "phone": "963935448445",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966582510899": {
+      "phone": "966582510899",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966560086479": {
+      "phone": "966560086479",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966553534358": {
+      "phone": "966553534358",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966559153476": {
+      "phone": "966559153476",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966542370296": {
+      "phone": "966542370296",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966579318756": {
+      "phone": "966579318756",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966554893308": {
+      "phone": "966554893308",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966559089262": {
+      "phone": "966559089262",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966533679355": {
+      "phone": "966533679355",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966537882218": {
+      "phone": "966537882218",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966556588733": {
+      "phone": "966556588733",
       "pushName": "غير مسجل",
       "helpRequestsCount": 0,
       "adsCount": 0,
