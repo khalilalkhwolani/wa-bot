@@ -173,10 +173,8 @@ export async function startWhatsAppSession(sessionId: string) {
 					rawMessage: msg
 				}
 
-				// استخدام محرك تجميع السياق (Context Builder) لدمج الرسائل المتتالية للمرسل خلال 10 ثوانٍ
-				contextBuilder.addMessage(sliemMsg, (combinedMsg) => {
-					handleStudentLeadMessage(sock, sessionId, combinedMsg)
-				})
+				// معالجة الرسالة مباشرة لضمان الحصول على نص الطلب الصافي والدقيق دون دمج دردشة المجموعة
+				handleStudentLeadMessage(sock, sessionId, sliemMsg)
 			}
 		}
 	})
