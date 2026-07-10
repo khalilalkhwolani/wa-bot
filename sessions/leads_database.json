@@ -1,134 +1,1170 @@
-[
-  {
-    "studentPhone": "967776007366",
-    "studentName": "Khalil",
-    "originalGroup": "تجريبي",
-    "messageContent": "يا شباب من يحل لي واجب رياضيات عاجل؟",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636283810-172",
-    "createdAt": "2026-07-09T22:31:23.810Z"
+{
+  "leads": [
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "تجريبي",
+      "messageContent": "يا شباب من يحل لي واجب رياضيات عاجل؟",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636283810-172",
+      "createdAt": "2026-07-09T22:31:23.810Z"
+    },
+    {
+      "studentPhone": "966542614024",
+      "studentName": "🧚🏻💜ً",
+      "originalGroup": "خريجات 𝗞𝗸𝘂 دفعة 𝟐𝟖👩🏻‍🎓",
+      "messageContent": "كيف تجيبونه الحل إنكم تطلبونه من  عمادة القبول والتسجيل في جامعتكم أو كليتكم ولازم تتأكدون إنه مختوم وموثق بختمهم الرسمي",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636332827-834",
+      "createdAt": "2026-07-09T22:32:12.827Z"
+    },
+    {
+      "studentPhone": "966503967662",
+      "studentName": "‏محمد إبراهيم ابو مَيان",
+      "originalGroup": "النحو(٣)٦٤٠",
+      "messageContent": "‏هذا سؤال الواجب الأول ولا الثاني ؟؟",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636536727-67",
+      "createdAt": "2026-07-09T22:35:36.727Z"
+    },
+    {
+      "studentPhone": "966559723166",
+      "studentName": "ً",
+      "originalGroup": "مبادئ إداره",
+      "messageContent": "منو فهمت الواجب؟",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636603776-565",
+      "createdAt": "2026-07-09T22:36:43.776Z"
+    },
+    {
+      "studentPhone": "966555315374",
+      "studentName": "renad",
+      "originalGroup": "مبادئ إداره",
+      "messageContent": "انا مافهمته الصدق",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636623096-463",
+      "createdAt": "2026-07-09T22:37:03.096Z"
+    },
+    {
+      "studentPhone": "966534736236",
+      "studentName": "ٰ",
+      "originalGroup": "مراجعات نظم المعلومات⚠️🖥️",
+      "messageContent": "وعليكم السلام بداية الترم",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783636747947-603",
+      "createdAt": "2026-07-09T22:39:07.947Z"
+    },
+    {
+      "studentPhone": "966538308271",
+      "studentName": "عبد الله كرم",
+      "originalGroup": "النحو(٣)٦٤٠",
+      "messageContent": "الثالث",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783637212362-891",
+      "createdAt": "2026-07-09T22:46:52.362Z"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "تجريبي",
+      "messageContent": "منمممممممممممممممممن يحل؟",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783637598877-782",
+      "createdAt": "2026-07-09T22:53:18.877Z"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "تجريبي",
+      "messageContent": "\"يا شباب من يمسك لي واجب شبكات عاجل وبندفع له؟\"",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783638127719-273",
+      "createdAt": "2026-07-09T23:02:07.719Z"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "تجريبي",
+      "messageContent": "اشتي مساعده لو سمحتم",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783638506388-622",
+      "createdAt": "2026-07-09T23:08:26.388Z"
+    },
+    {
+      "studentPhone": "966566165744",
+      "studentName": "سلوى 💗🌸",
+      "originalGroup": "|BUS 1103 | اقتصاد جزئي|قروب النقاش",
+      "messageContent": "أنا اعتمدت شابيرو طبعا، وفي في هذا الملف مراجع أخذت منها",
+      "classification": "HELP_REQUEST",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 50,
+      "confidence": 0.5,
+      "id": "LD-1783641653806-639",
+      "createdAt": "2026-07-10T00:00:53.806Z"
+    },
+    {
+      "studentPhone": "120363425041312048",
+      "studentName": "غير مسجل",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "صباحو مين صاحي اريد مساعده بسيطه في المجله الاسبوع الثالث 😅😅 يجماعه احتاج احد يساعدني المجله لازم اكتب مقدمه وخاتمه ولا خلاص اشتغل ع جدول الاكسل المجله لازم اكتب مقدمه وخاتمه ولا خلاص اشتغل ع جدول الاكسل المراجع من فين؟ أحطهم الاثنين ولا واحد؟ هو ليه طالع لي اكثر من واحد بسم الله شوفي يعني هذا هو الجدول اعبي بس الثلاث الي قلتيهم شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ صح ؟ احد يرد بليز السلام عليكم اقدر اسوي اسقاط للمادة؟ بما انننا بالاسبوع الرابع؟ لا مو قادرة اركز ومو فاهمة ما ابغى اكمل بشي وانا مو فاهمته احس قاعدة اضغط على نفسي والفترة هذي اصلًا منضغطة اقدر اسوي اسقاط صح طيب سوالي ؟ واذا كملت وانا مو فاهمة احس مو حلوة بحق نفسي ايوه يمديكي هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه حلو حلو والله مدري يا اف مليون اسف انا ابغى اهرب من ذي المادة اصبري فيني بكيه ي زد ابغا اهرب من كل شي انا قبل لا اسمح لدموعي تنزل بهرب ما عليك سهالات ان شاء الله هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه حبايبي والله الضايعين 😭😭😭😭😭😭😭 انا قرررت اسحب نفسي والله عشان خلاص مع ان ما احب كذا كملي عشان تفتكي بس ايش اسويييي واذا مو فاهمة شيييي صحبتي سحبت بنفس الترم وتندمت ودخلت مع مجموعه ماتعرفهم امممم ياخي مدري مو حالة الواجب خليها ع ربك😭 ولا بديت بالمجلة ولا في وقت حقيقييي والله لازم تنقرض باسرع وقت شكلي بروح ابكي عند الدكتور فيه وقت صدقينيي والله حيرتوني يا بنات قاعده اكلمك وانا ماخلصت لا ذي الماده ولا الاقتصاد الجزئي طيب اعمل اييييه طيب اعمل اييييه والله حيرتوني يا بنات قاعده اكلمك وانا ماخلصت لا ذي الماده ولا الاقتصاد الجزئي والله انصحك تكملي لاتلقميها زي صحبتي حبيبتي والله ومين يحل الواجب طيب وضعنا يحزن وربي واخذ صفر ي زد ماتبين كنتاكي بعد؟ عندي فكرة وحدة تحل وتعطينا 🤣🤣🤣 الله يسعدك كثري صوصات لاتسمعك المشرفه بتهبد ع راسك المشرفات سووو نايمين جيعانه؟ والله حموت جوع وغمضوا لا اكلت بس جوعانة للواجب شعرفك احس كذا يمه من فين طلع واذا شافوا كلامي خليهم يسوو مجانين هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه تشوفي كيف اسكتي لعاد تحسين يقطع يقطع هذي للمشرفين عشان يناموا لوسمحت سوالي شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ يمه يمه ي زد اسكتي تراها تتغشمر والله نمزح ونطقطق اي فيديو الصدق لا لان ابغا اعرف بس إذا هو ولا وش الي نشرحو طيب وش نشرح🦦 اسمك تركي؟ قاعده اقراه تركيا💔💔شدعوه مو لهدرجه فيني نوم عيونييييي طيب سؤالييييي!!! اهبد ماعندي يعني حاضر أستاذه رؤى وربي كفوووو @245629213225170  حليييي بسرعه تخيلي تبغا تنسحب من الجامعه مجنونه ايه فيه وقت لسى والله مدري عنها المهم تبي تنسحب من دي الماده وش ابرعو دي زينه الله يحفظش @245629213225170 وانتي من اهله🤍 مين جاب 10/10 في المجله اني ماشاء الله قارن اجابتي باجابتك الاستاذ/ة  كتب وين الاغلاط ؟ بأي جدول بقصد دكتوره ظالمه يبارك فيكي😁💗💗 U.S. Securities and Exchange Commission. (2004, February 19). SEC charges Jeffrey K. Skilling, Enron’s former President, Chief Executive Officer and Chief Operating Officer, with fraud [Press release]  https://www.sec.gov/news/press/2004-18.htm الله يسلمك يارب اعتذر من الجميع على عدم قدرتي للرد ع الخاص بسبب ظرف صحي\nباذن الله هاي الوحدة معاكم ورح ساعدكم مع الزميلة رؤى كالعادة\n@all كل خير ان شاء الله \nازمة وعدت ولله الحمد الله يسلمك يارب ماتشوفي شر💐 الله يسلمك ويحفظك🙏🏻💐 بعتيلي الرابط لو سمحتي لشوفو بتوقع في افضل منو موفقة يارب تكرمي هاد بودكاست مو مقال😬 الله يسلمك ويعافي قلبك يارب💐🙏🏻 بسيطة بدورلك وبزودك ان شاء الله بس بعتيلي نقطة ع الخاص حتى ما انسى لا ويكبيديا سيء بشكل",
+      "classification": "ASK_HELP",
+      "subject": "غير محدد",
+      "score": 50,
+      "confidence": 1,
+      "id": "LD-1783712542885-573",
+      "createdAt": "2026-07-10T19:42:22.885Z",
+      "sentMessageId": "3EB059B8030E15AC040386"
+    },
+    {
+      "studentPhone": "966572556796",
+      "studentName": "اللهم لك الحمد",
+      "originalGroup": "روابط مجموعات",
+      "messageContent": "https://chat.whatsapp.com/DHz3qivSN89ItPal80kro4",
+      "classification": "DISCUSSION",
+      "subject": "رابط مجموعة",
+      "score": 50,
+      "confidence": 0.8,
+      "id": "LD-1783712626709-916",
+      "createdAt": "2026-07-10T19:43:46.709Z"
+    },
+    {
+      "studentPhone": "120363318305746532",
+      "studentName": "غير مسجل",
+      "originalGroup": "AGRI & Food Sciences 🍒",
+      "messageContent": "‏﴿ إِنَّ اللَّهَ وَمَلائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ يَا أَيُّهَا الَّذِينَ آمَنُوا صَلُّوا عَلَيْهِ وَسَلِّمُوا تَسْلِيماً ۝ ﴾\n\nعن أبي سَعيدٍ الخُدريِّ عنِ النبيِّ صلَّى اللهُ عليه وسلَّم أنَّه قال: (( مَن قَرَأَ سورةَ الكَهفِ يومَ الجُمُعةِ أضاءَ له من النورِ ما بَينَ الجُمُعتينِ  )) اي https://services.kfu.edu.sa/Services/Account/Login?ReturnUrl=%2fservices",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783712664522-471",
+      "createdAt": "2026-07-10T19:44:24.522Z",
+      "sentMessageId": "3EB02A8999FC66A77E122D"
+    },
+    {
+      "studentPhone": "966581564168",
+      "studentName": "F",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "يجماعه احتاج احد يساعدني المجله لازم اكتب مقدمه وخاتمه ولا خلاص اشتغل ع جدول الاكسل المراجع من فين؟ أحطهم الاثنين ولا واحد؟ هو ليه طالع لي اكثر من واحد بسم الله شوفي يعني هذا هو الجدول اعبي بس الثلاث الي قلتيهم شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ صح ؟ احد يرد بليز طيب سوالي ؟ ايوه يمديكي اصبري فيني بكيه ي زد ابغا اهرب من كل شي 😭😭😭😭😭😭😭 كملي عشان تفتكي صحبتي سحبت بنفس الترم وتندمت ودخلت مع مجموعه ماتعرفهم خليها ع ربك😭 حقيقييي والله لازم تنقرض باسرع وقت فيه وقت صدقينيي قاعده اكلمك وانا ماخلصت لا ذي الماده ولا الاقتصاد الجزئي والله انصحك تكملي لاتلقميها زي صحبتي وضعنا يحزن ي زد ماتبين كنتاكي بعد؟ لاتسمعك المشرفه بتهبد ع راسك جيعانه؟ والله حموت جوع شعرفك يمه من فين طلع اسكتي لعاد تحسين طيب سؤالييييي!!! اهبد ماعندي يعني حاضر أستاذه رؤى وربي كفوووو @245629213225170  حليييي بسرعه تخيلي تبغا تنسحب من الجامعه مجنونه ايه فيه وقت لسى والله مدري عنها المهم تبي تنسحب من دي الماده وش ابرعو دي زينه الله يحفظش @245629213225170 وانتي من اهله🤍",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 60,
+      "confidence": 0.5,
+      "id": "LD-1783712673854-969",
+      "createdAt": "2026-07-10T19:44:33.854Z",
+      "sentMessageId": "3EB0E8A427627F40E30DA8"
+    },
+    {
+      "studentPhone": "120363425041312048",
+      "studentName": "غير مسجل",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "صباحو مين صاحي اريد مساعده بسيطه في المجله الاسبوع الثالث 😅😅 يجماعه احتاج احد يساعدني المجله لازم اكتب مقدمه وخاتمه ولا خلاص اشتغل ع جدول الاكسل المراجع من فين؟ أحطهم الاثنين ولا واحد؟ هو ليه طالع لي اكثر من واحد بسم الله شوفي يعني هذا هو الجدول اعبي بس الثلاث الي قلتيهم شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ صح ؟ احد يرد بليز طيب سوالي ؟ ايوه يمديكي اصبري فيني بكيه ي زد ابغا اهرب من كل شي 😭😭😭😭😭😭😭 كملي عشان تفتكي صحبتي سحبت بنفس الترم وتندمت ودخلت مع مجموعه ماتعرفهم خليها ع ربك😭 حقيقييي والله لازم تنقرض باسرع وقت فيه وقت صدقينيي قاعده اكلمك وانا ماخلصت لا ذي الماده ولا الاقتصاد الجزئي والله انصحك تكملي لاتلقميها زي صحبتي وضعنا يحزن ي زد ماتبين كنتاكي بعد؟ لاتسمعك المشرفه بتهبد ع راسك جيعانه؟ والله حموت جوع شعرفك يمه من فين طلع اسكتي لعاد تحسين لوسمحت سوالي شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ يمه يمه ي زد اسكتي تراها تتغشمر الصدق لا لان ابغا اعرف بس إذا هو ولا وش الي نشرحو طيب وش نشرح🦦 اسمك تركي؟ قاعده اقراه تركيا💔💔شدعوه مو لهدرجه فيني نوم عيونييييي طيب سؤالييييي!!! اهبد ماعندي يعني حاضر أستاذه رؤى وربي كفوووو @245629213225170  حليييي بسرعه تخيلي تبغا تنسحب من الجامعه مجنونه ايه فيه وقت لسى والله مدري عنها المهم تبي تنسحب من دي الماده وش ابرعو دي زينه الله يحفظش @245629213225170 وانتي من اهله🤍 مين جاب 10/10 في المجله اني الاستاذ/ة  كتب وين الاغلاط ؟ ماشاء الله بأي جدول بقصد قارن اجابتي باجابتك دكتوره ظالمه يبارك فيكي😁💗💗 U.S. Securities and Exchange Commission. (2004, February 19). SEC charges Jeffrey K. Skilling, Enron’s former President, Chief Executive Officer and Chief Operating Officer, with fraud [Press release]  https://www.sec.gov/news/press/2004-18.htm الله يسلمك يارب اعتذر من الجميع على عدم قدرتي للرد ع الخاص بسبب ظرف صحي\nباذن الله هاي الوحدة معاكم ورح ساعدكم مع الزميلة رؤى كالعادة\n@all كل خير ان شاء الله \nازمة وعدت ولله الحمد الله يسلمك يارب ماتشوفي شر💐 الله يسلمك ويحفظك🙏🏻💐 بعتيلي الرابط لو سمحتي لشوفو بتوقع في افضل منو موفقة يارب تكرمي هاد بودكاست مو مقال😬 الله يسلمك ويعافي قلبك يارب💐🙏🏻 بسيطة بدورلك وبزودك ان شاء الله بس بعتيلي نقطة ع الخاص حتى ما انسى لا ويكبيديا سيء بشكل",
+      "classification": "ASK_HELP",
+      "subject": "غير محدد",
+      "score": 50,
+      "confidence": 0.95,
+      "id": "LD-1783712685101-353",
+      "createdAt": "2026-07-10T19:44:45.101Z",
+      "sentMessageId": "3EB028F8B8F5A8BC1BFDC8"
+    },
+    {
+      "studentPhone": "967773474700",
+      "studentName": "عبدالرحمن الخراز",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "صباحو مين صاحي اريد مساعده بسيطه في المجله الاسبوع الثالث 😅😅 مين جاب 10/10 في المجله ماشاء الله قارن اجابتي باجابتك دكتوره ظالمه",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783712696729-74",
+      "createdAt": "2026-07-10T19:44:56.729Z",
+      "sentMessageId": "3EB0D904B1BF18EC701FE7"
+    },
+    {
+      "studentPhone": "966576085529",
+      "studentName": "منصور بن عبدالله ",
+      "originalGroup": "AGRI & Food Sciences 🍒",
+      "messageContent": "هاذي الخطط الدراسية لكل تخصص 👆🏼. طبعاً اول سنتين تكون تدرس مواد عامة وبعدين سنتين تخصص بعد 9 أيام ..\n\nإعلان نتائج القبول النهائي وتأكيد الاختبار في منصة #قبول. اللي راتب ابوه قوي ماله اولويه ينقبل ويمديه يقدم ع السكن لكن ماله اولويه ‏﴿ إِنَّ اللَّهَ وَمَلائِكَتَهُ يُصَلُّونَ عَلَى النَّبِيِّ يَا أَيُّهَا الَّذِينَ آمَنُوا صَلُّوا عَلَيْهِ وَسَلِّمُوا تَسْلِيماً ۝ ﴾\n\nعن أبي سَعيدٍ الخُدريِّ عنِ النبيِّ صلَّى اللهُ عليه وسلَّم أنَّه قال: (( مَن قَرَأَ سورةَ الكَهفِ يومَ الجُمُعةِ أضاءَ له من النورِ ما بَينَ الجُمُعتينِ  )) اي https://services.kfu.edu.sa/Services/Account/Login?ReturnUrl=%2fservices",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783712707988-849",
+      "createdAt": "2026-07-10T19:45:07.988Z",
+      "sentMessageId": "3EB0B14CC4F0E0A3BDC779"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "العمل",
+      "messageContent": "ابغى مساعده في الحاسوب؟",
+      "classification": "ASK_HELP",
+      "subject": "غير محدد",
+      "score": 30,
+      "confidence": 0.9,
+      "id": "LD-1783713207231-48",
+      "createdAt": "2026-07-10T19:53:27.231Z",
+      "sentMessageId": "3EB028B2716BEAEE2E2762"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "العمل",
+      "messageContent": "يا شباب من يعرف مبرمج يحل لي واجب جافا عاجل بليز؟",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 60,
+      "confidence": 0.5,
+      "id": "LD-1783714425557-710",
+      "createdAt": "2026-07-10T20:13:45.557Z",
+      "sentMessageId": "3EB0E0BB92C424BDAD113F"
+    },
+    {
+      "studentPhone": "120363425041312048",
+      "studentName": "غير مسجل",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "حبيبتي والله عشان خلاص اقدر اسوي اسقاط للمادة؟ الله يسعدك كثري صوصات ما عليك سهالات ان شاء الله امممم واذا مو فاهمة شيييي اقدر اسوي اسقاط صح ياخي مدري مع ان ما احب كذا هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه طيب اعمل اييييه مو حالة الواجب عندي فكرة بس ايش اسويييي وربي انا ابغى اهرب من ذي المادة شكلي بروح ابكي عند الدكتور المشرفات سووو نايمين حلو حلو احس قاعدة اضغط على نفسي ولا في وقت انا قبل لا اسمح لدموعي تنزل بهرب احس كذا والله حيرتوني يا بنات ولا بديت بالمجلة واذا كملت وانا مو فاهمة احس مو حلوة بحق نفسي وحدة تحل وتعطينا 🤣🤣🤣 انا قرررت اسحب نفسي والله واخذ صفر بس جوعانة للواجب هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه وغمضوا لا اكلت والفترة هذي اصلًا منضغطة والله مدري يا اف ما ابغى اكمل بشي وانا مو فاهمته بما انننا بالاسبوع الرابع؟ ومين يحل الواجب طيب لا مو قادرة اركز ومو فاهمة مليون اسف حبايبي والله الضايعين السلام عليكم",
+      "classification": "ASK_HELP",
+      "subject": "غير محدد",
+      "score": 30,
+      "confidence": 1,
+      "id": "LD-1783714432470-583",
+      "createdAt": "2026-07-10T20:13:52.470Z",
+      "sentMessageId": "3EB0405237A99816A8D20B"
+    },
+    {
+      "studentPhone": "966563676485",
+      "studentName": "اللهم لك الحمد",
+      "originalGroup": "روابط مجموعات",
+      "messageContent": "https://chat.whatsapp.com/DHz3qivSN89ItPal80kro4",
+      "classification": "DISCUSSION",
+      "subject": "رابط مجموعة",
+      "score": 50,
+      "confidence": 0.8,
+      "id": "LD-1783714846469-424",
+      "createdAt": "2026-07-10T20:20:46.469Z"
+    },
+    {
+      "studentPhone": "967776007366",
+      "studentName": "Khalil",
+      "originalGroup": "العمل",
+      "messageContent": "تطلع إجازات مرضية تنزل بصحتي\n  وتحل الواجبات باسعر مرة كويسة 0.59586910",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783715065389-593",
+      "createdAt": "2026-07-10T20:24:25.389Z",
+      "sentMessageId": "3EB01508912C074A85FA97"
+    },
+    {
+      "studentPhone": "966567516097",
+      "studentName": "ml",
+      "originalGroup": "روابط مجموعات",
+      "messageContent": "https://chat.whatsapp.com/CD7ZX9dRI8gD9tXbVUoSKw",
+      "classification": "DISCUSSION",
+      "subject": "رابط مجموعة",
+      "score": 50,
+      "confidence": 0.8,
+      "id": "LD-1783715077143-842",
+      "createdAt": "2026-07-10T20:24:37.143Z"
+    },
+    {
+      "studentPhone": "غير معروف",
+      "studentName": "غير مسجل",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "لا مو قادرة اركز ومو فاهمة ما ابغى اكمل بشي وانا مو فاهمته السلام عليكم حبيبتي والله عشان خلاص اقدر اسوي اسقاط للمادة؟ الله يسعدك كثري صوصات ما عليك سهالات ان شاء الله امممم واذا مو فاهمة شيييي اقدر اسوي اسقاط صح ياخي مدري مع ان ما احب كذا هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه طيب اعمل اييييه مو حالة الواجب عندي فكرة بس ايش اسويييي وربي انا ابغى اهرب من ذي المادة شكلي بروح ابكي عند الدكتور المشرفات سووو نايمين احس كذا والله حيرتوني يا بنات واذا كملت وانا مو فاهمة احس مو حلوة بحق نفسي وحدة تحل وتعطينا 🤣🤣🤣 انا قرررت اسحب نفسي والله واخذ صفر بس جوعانة للواجب حلو حلو المشرفات سووو نايمين احس قاعدة اضغط على نفسي ولا في وقت ولا بديت بالمجلة هههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههههه وغمضوا انا قبل لا اسمح لدموعي تنزل بهرب والفترة هذي اصلًا منضغطة لا اكلت ومين يحل الواجب طيب بما انننا بالاسبوع الرابع؟ والله مدري يا اف مليون اسف حبايبي والله الضايعين",
+      "classification": "ASK_HELP",
+      "subject": "غير محدد",
+      "score": 30,
+      "confidence": 1,
+      "id": "LD-1783716048765-671",
+      "createdAt": "2026-07-10T20:40:48.765Z",
+      "sentMessageId": "3EB026038C1FDCD218B1C7"
+    },
+    {
+      "studentPhone": "966502957747",
+      "studentName": "ashowg",
+      "originalGroup": "تدريب في الملك فهد لمتدربي",
+      "messageContent": "ابي ايميل المهندس",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 40,
+      "confidence": 0.5,
+      "id": "LD-1783716290097-4",
+      "createdAt": "2026-07-10T20:44:50.097Z",
+      "sentMessageId": "3EB04F3E10901C0D086FD4"
+    },
+    {
+      "studentPhone": "966581564168",
+      "studentName": "F",
+      "originalGroup": "أساسيات المحاسبة قروب النقاش",
+      "messageContent": "اسكتي لعاد تحسين لوسمحت سوالي شرح استخدام دفتر اليوميه ودفتر الاستاذ؟ يمه يمه ي زد اسكتي تراها تتغشمر الصدق لا لان ابغا اعرف بس إذا هو ولا وش الي نشرحو طيب وش نشرح🦦 اسمك تركي؟ قاعده اقراه تركيا💔💔شدعوه مو لهدرجه فيني نوم عيونييييي",
+      "classification": "ASK_HELP",
+      "subject": "خطأ اتصال بالذكاء الاصطناعي",
+      "score": 60,
+      "confidence": 0.5,
+      "id": "LD-1783717029040-429",
+      "createdAt": "2026-07-10T20:57:09.040Z",
+      "sentMessageId": "3EB0518BA1AF5588FA026D"
+    }
+  ],
+  "behaviors": {
+    "120363423627568125": {
+      "phone": "120363423627568125",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363425041312048": {
+      "phone": "120363425041312048",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363403715631545": {
+      "phone": "120363403715631545",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363429512035713": {
+      "phone": "120363429512035713",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363419170381356": {
+      "phone": "120363419170381356",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363423042783100": {
+      "phone": "120363423042783100",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363420310409340": {
+      "phone": "120363420310409340",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363422053515829": {
+      "phone": "120363422053515829",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363409959647502": {
+      "phone": "120363409959647502",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363409767138024": {
+      "phone": "120363409767138024",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363425887843327": {
+      "phone": "120363425887843327",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363411144991572": {
+      "phone": "120363411144991572",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363405929752240": {
+      "phone": "120363405929752240",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363404216349572": {
+      "phone": "120363404216349572",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363424047064984": {
+      "phone": "120363424047064984",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363409755819666": {
+      "phone": "120363409755819666",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363429082133731": {
+      "phone": "120363429082133731",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363427783668153": {
+      "phone": "120363427783668153",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363408476829644": {
+      "phone": "120363408476829644",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363425146648064": {
+      "phone": "120363425146648064",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363409587939246": {
+      "phone": "120363409587939246",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363424562655598": {
+      "phone": "120363424562655598",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363147851524388": {
+      "phone": "120363147851524388",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363428684597791": {
+      "phone": "120363428684597791",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363409731859128": {
+      "phone": "120363409731859128",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "120363318305746532": {
+      "phone": "120363318305746532",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966556224746": {
+      "phone": "966556224746",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966538495640": {
+      "phone": "966538495640",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966558690927": {
+      "phone": "966558690927",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966504892878": {
+      "phone": "966504892878",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966559784579": {
+      "phone": "966559784579",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966548299510": {
+      "phone": "966548299510",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967772374758": {
+      "phone": "967772374758",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966549662346": {
+      "phone": "966549662346",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966502751567": {
+      "phone": "966502751567",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966576242920": {
+      "phone": "966576242920",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966589847264": {
+      "phone": "966589847264",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966568719347": {
+      "phone": "966568719347",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966507976275": {
+      "phone": "966507976275",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966574372801": {
+      "phone": "966574372801",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966537950214": {
+      "phone": "966537950214",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966572556796": {
+      "phone": "966572556796",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966569745355": {
+      "phone": "966569745355",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966551219451": {
+      "phone": "966551219451",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966504530105": {
+      "phone": "966504530105",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966555977801": {
+      "phone": "966555977801",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966570672299": {
+      "phone": "966570672299",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966530004409": {
+      "phone": "966530004409",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966550190421": {
+      "phone": "966550190421",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966533166405": {
+      "phone": "966533166405",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966551868228": {
+      "phone": "966551868228",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966558538141": {
+      "phone": "966558538141",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966581564168": {
+      "phone": "966581564168",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966500787214": {
+      "phone": "966500787214",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963986741167": {
+      "phone": "963986741167",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966575089797": {
+      "phone": "966575089797",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967730823552": {
+      "phone": "967730823552",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966591628000": {
+      "phone": "966591628000",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966543824002": {
+      "phone": "966543824002",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966553485808": {
+      "phone": "966553485808",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966504654618": {
+      "phone": "966504654618",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966596194464": {
+      "phone": "966596194464",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966590442246": {
+      "phone": "966590442246",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966566898205": {
+      "phone": "966566898205",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966558785234": {
+      "phone": "966558785234",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966503663397": {
+      "phone": "966503663397",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967773474700": {
+      "phone": "967773474700",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "4917640375831": {
+      "phone": "4917640375831",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966576085529": {
+      "phone": "966576085529",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963945040415": {
+      "phone": "963945040415",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966567149835": {
+      "phone": "966567149835",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966501048533": {
+      "phone": "966501048533",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967739840767": {
+      "phone": "967739840767",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966555116221": {
+      "phone": "966555116221",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966552862369": {
+      "phone": "966552862369",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966558660490": {
+      "phone": "966558660490",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966557880075": {
+      "phone": "966557880075",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967776007366": {
+      "phone": "967776007366",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966500466540": {
+      "phone": "966500466540",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967734335140": {
+      "phone": "967734335140",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966557144985": {
+      "phone": "966557144985",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966539762751": {
+      "phone": "966539762751",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966535775810": {
+      "phone": "966535775810",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966530373082": {
+      "phone": "966530373082",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966547752825": {
+      "phone": "966547752825",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966557539392": {
+      "phone": "966557539392",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966530992980": {
+      "phone": "966530992980",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967772708867": {
+      "phone": "967772708867",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966576395487": {
+      "phone": "966576395487",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966509119511": {
+      "phone": "966509119511",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966533091970": {
+      "phone": "966533091970",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966533065717": {
+      "phone": "966533065717",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966568462197": {
+      "phone": "966568462197",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966599967291": {
+      "phone": "966599967291",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966534672287": {
+      "phone": "966534672287",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966500774518": {
+      "phone": "966500774518",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966563676485": {
+      "phone": "966563676485",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963936290036": {
+      "phone": "963936290036",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963954461121": {
+      "phone": "963954461121",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966572418934": {
+      "phone": "966572418934",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966543937395": {
+      "phone": "966543937395",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966546108856": {
+      "phone": "966546108856",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "": {
+      "phone": "",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966591307865": {
+      "phone": "966591307865",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967780290277": {
+      "phone": "967780290277",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966503505064": {
+      "phone": "966503505064",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "213549310056": {
+      "phone": "213549310056",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966548788670": {
+      "phone": "966548788670",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966540550217": {
+      "phone": "966540550217",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966543256654": {
+      "phone": "966543256654",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966502957747": {
+      "phone": "966502957747",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "963980992713": {
+      "phone": "963980992713",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966508089840": {
+      "phone": "966508089840",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966556252160": {
+      "phone": "966556252160",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966547143024": {
+      "phone": "966547143024",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966539377642": {
+      "phone": "966539377642",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "967739685006": {
+      "phone": "967739685006",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    },
+    "966508454626": {
+      "phone": "966508454626",
+      "pushName": "غير مسجل",
+      "helpRequestsCount": 0,
+      "adsCount": 0,
+      "trustScore": 0.5
+    }
   },
-  {
-    "studentPhone": "966542614024",
-    "studentName": "🧚🏻💜ً",
-    "originalGroup": "خريجات 𝗞𝗸𝘂 دفعة 𝟐𝟖👩🏻‍🎓",
-    "messageContent": "كيف تجيبونه الحل إنكم تطلبونه من  عمادة القبول والتسجيل في جامعتكم أو كليتكم ولازم تتأكدون إنه مختوم وموثق بختمهم الرسمي",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636332827-834",
-    "createdAt": "2026-07-09T22:32:12.827Z"
-  },
-  {
-    "studentPhone": "966503967662",
-    "studentName": "‏محمد إبراهيم ابو مَيان",
-    "originalGroup": "النحو(٣)٦٤٠",
-    "messageContent": "‏هذا سؤال الواجب الأول ولا الثاني ؟؟",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636536727-67",
-    "createdAt": "2026-07-09T22:35:36.727Z"
-  },
-  {
-    "studentPhone": "966559723166",
-    "studentName": "ً",
-    "originalGroup": "مبادئ إداره",
-    "messageContent": "منو فهمت الواجب؟",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636603776-565",
-    "createdAt": "2026-07-09T22:36:43.776Z"
-  },
-  {
-    "studentPhone": "966555315374",
-    "studentName": "renad",
-    "originalGroup": "مبادئ إداره",
-    "messageContent": "انا مافهمته الصدق",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636623096-463",
-    "createdAt": "2026-07-09T22:37:03.096Z"
-  },
-  {
-    "studentPhone": "966534736236",
-    "studentName": "ٰ",
-    "originalGroup": "مراجعات نظم المعلومات⚠️🖥️",
-    "messageContent": "وعليكم السلام بداية الترم",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783636747947-603",
-    "createdAt": "2026-07-09T22:39:07.947Z"
-  },
-  {
-    "studentPhone": "966538308271",
-    "studentName": "عبد الله كرم",
-    "originalGroup": "النحو(٣)٦٤٠",
-    "messageContent": "الثالث",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783637212362-891",
-    "createdAt": "2026-07-09T22:46:52.362Z"
-  },
-  {
-    "studentPhone": "967776007366",
-    "studentName": "Khalil",
-    "originalGroup": "تجريبي",
-    "messageContent": "منمممممممممممممممممن يحل؟",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال بالذكاء الاصطناعي",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783637598877-782",
-    "createdAt": "2026-07-09T22:53:18.877Z"
-  },
-  {
-    "studentPhone": "967776007366",
-    "studentName": "Khalil",
-    "originalGroup": "تجريبي",
-    "messageContent": "\"يا شباب من يمسك لي واجب شبكات عاجل وبندفع له؟\"",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال بالذكاء الاصطناعي",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783638127719-273",
-    "createdAt": "2026-07-09T23:02:07.719Z"
-  },
-  {
-    "studentPhone": "967776007366",
-    "studentName": "Khalil",
-    "originalGroup": "تجريبي",
-    "messageContent": "اشتي مساعده لو سمحتم",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال بالذكاء الاصطناعي",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783638506388-622",
-    "createdAt": "2026-07-09T23:08:26.388Z"
-  },
-  {
-    "studentPhone": "966566165744",
-    "studentName": "سلوى 💗🌸",
-    "originalGroup": "|BUS 1103 | اقتصاد جزئي|قروب النقاش",
-    "messageContent": "أنا اعتمدت شابيرو طبعا، وفي في هذا الملف مراجع أخذت منها",
-    "classification": "HELP_REQUEST",
-    "subject": "خطأ اتصال بالذكاء الاصطناعي",
-    "score": 50,
-    "confidence": 0.5,
-    "id": "LD-1783641653806-639",
-    "createdAt": "2026-07-10T00:00:53.806Z"
-  }
-]
+  "dynamicRules": []
+}
