@@ -10,24 +10,74 @@ export interface AIAnalysisResult {
 	reason: string
 }
 
-/**
- * خدمة الاتصال بـ Gemini API لتصنيف الرسائل مع دعم سياق الردود المقتبسة
- */
-export async function analyzeMessageWithAI(text: string, quotedContext?: string): Promise<AIAnalysisResult> {
-	const apiKey = config.GEMINI_API_KEY
+async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
+	const apiKey = config.MINIMAX_API_KEY
 	if (!apiKey) {
-		console.warn('⚠️ لم يتم العثور على متغير البيئة GEMINI_API_KEY. سيتم استخدام التصنيف المحلي الافتراضي.')
-		return {
-			classification: 'HELP_REQUEST',
-			confidence: 0.50,
-			subject: 'غير محدد',
-			category: 'غير محدد',
-			urgency: 'Medium',
-			leadScore: 50,
-			reason: 'تم التمرير كاحتياط لعدم توفر مفتاح الذكاء الاصطناعي (API Key)'
-		}
+		throw new Error('MiniMax API Key is not configured')
 	}
 
+	const url = 'https://api.minimax.io/v1/chat/completions'
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: { 
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`
+		},
+		body: JSON.stringify({
+			model: 'MiniMax-M3',
+			messages: [
+				{ role: 'user', content: prompt }
+			],
+			response_format: { type: 'json_object' }
+		})
+	})
+
+	if (!response.ok) {
+		const errText = await response.text().catch(() => '')
+		throw new Error(`MiniMax API returned status ${response.status}: ${errText}`)
+	}
+
+	const data: any = await response.json()
+	const jsonText = data.choices?.[0]?.message?.content
+	if (!jsonText) throw new Error('Empty response from MiniMax')
+
+	return JSON.parse(jsonText.trim())
+}
+
+async function tryGemini(prompt: string): Promise<AIAnalysisResult> {
+	const apiKey = config.GEMINI_API_KEY
+	if (!apiKey) {
+		throw new Error('Gemini API Key is not configured')
+	}
+
+	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			contents: [{ parts: [{ text: prompt }] }],
+			generationConfig: {
+				responseMimeType: 'application/json'
+			}
+		})
+	})
+
+	if (!response.ok) {
+		const errText = await response.text().catch(() => '')
+		throw new Error(`Gemini API returned status ${response.status}: ${errText}`)
+	}
+
+	const data: any = await response.json()
+	const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text
+	if (!jsonText) throw new Error('Empty response from Gemini')
+
+	return JSON.parse(jsonText.trim())
+}
+
+/**
+ * خدمة الاتصال بالذكاء الاصطناعي مع دعم سلاسل بديلة (MiniMax -> Gemini -> Fallback محلي)
+ */
+export async function analyzeMessageWithAI(text: string, quotedContext?: string): Promise<AIAnalysisResult> {
 	const prompt = `
 أنت محلل محادثات أكاديمي وخبير في تصفية وتصنيف رسائل الطلاب واستخراج الفرص (Leads).
 مهمتك هي قراءة الرسالة الواردة (وقراءة سياق الرسالة المقتبسة إن وجد) وتصنيفها بدقة تامة.
@@ -60,38 +110,30 @@ export async function analyzeMessageWithAI(text: string, quotedContext?: string)
 }
 `
 
+	// 1. محاولة الاتصال بـ MiniMax
 	try {
-		const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
-		const response = await fetch(url, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				contents: [{ parts: [{ text: prompt }] }],
-				generationConfig: {
-					responseMimeType: 'application/json'
-				}
-			})
-		})
-
-		if (!response.ok) {
-			throw new Error(`Gemini API returned status ${response.status}`)
-		}
-
-		const data: any = await response.json()
-		const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text
-		if (!jsonText) throw new Error('Empty response from Gemini')
-
-		return JSON.parse(jsonText.trim())
-	} catch (err) {
-		console.error(`❌ خطأ أثناء الاتصال بـ Gemini API:`, err)
-		return {
-			classification: 'HELP_REQUEST',
-			confidence: 0.50,
-			subject: 'خطأ اتصال',
-			category: 'غير محدد',
-			urgency: 'Medium',
-			leadScore: 50,
-			reason: 'حدث خطأ اتصال بالذكاء الاصطناعي، تم التوجيه كاحتياط'
+		console.log('🤖 جاري فحص الرسالة عبر MiniMax...')
+		return await tryMiniMax(prompt)
+	} catch (minimaxErr: any) {
+		console.warn(`⚠️ فشل فحص الرسالة عبر MiniMax: ${minimaxErr.message || minimaxErr}`)
+		
+		// 2. محاولة الاتصال بـ Gemini في حال فشل الأول
+		try {
+			console.log('🔄 محاولة بديلة: جاري فحص الرسالة عبر Gemini...')
+			return await tryGemini(prompt)
+		} catch (geminiErr: any) {
+			console.error(`❌ فشل فحص الرسالة عبر Gemini أيضاً: ${geminiErr.message || geminiErr}`)
+			
+			// 3. الرجوع للتصفية المحلية الافتراضية
+			return {
+				classification: 'HELP_REQUEST',
+				confidence: 0.50,
+				subject: 'خطأ اتصال بالذكاء الاصطناعي',
+				category: 'غير محدد',
+				urgency: 'Medium',
+				leadScore: 50,
+				reason: 'فشل الاتصال بـ MiniMax و Gemini، تم التمرير كاحتياط محلي'
+			}
 		}
 	}
 }

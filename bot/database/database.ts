@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { UserBehavior, DynamicRule } from '../slie/types'
 
 export interface Lead {
 	id: string
@@ -12,28 +13,40 @@ export interface Lead {
 	score: number
 	confidence: number
 	createdAt: string
+	sentMessageId?: string
 }
 
 class JsonDatabase {
 	private filePath = path.join('sessions', 'leads_database.json')
 	private leads: Lead[] = []
+	private behaviors: { [phone: string]: UserBehavior } = {}
+	private dynamicRules: DynamicRule[] = []
 
 	constructor() {
 		this.load()
 	}
 
 	/**
-	 * تحميل البيانات من ملف JSON المستقر على القرص
+	 * تحميل البيانات من ملف JSON المستقر على القرص بمرونة كاملة
 	 */
 	private load() {
 		try {
 			if (fs.existsSync(this.filePath)) {
-				const data = fs.readFileSync(this.filePath, 'utf-8')
-				this.leads = JSON.parse(data)
+				const raw = fs.readFileSync(this.filePath, 'utf-8')
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					this.leads = parsed
+				} else {
+					this.leads = parsed.leads || []
+					this.behaviors = parsed.behaviors || {}
+					this.dynamicRules = parsed.dynamicRules || []
+				}
 			}
 		} catch (err) {
 			console.error('❌ فشل تحميل قاعدة البيانات المحلية:', err)
 			this.leads = []
+			this.behaviors = {}
+			this.dynamicRules = []
 		}
 	}
 
@@ -46,7 +59,12 @@ class JsonDatabase {
 			if (!fs.existsSync(dir)) {
 				fs.mkdirSync(dir, { recursive: true })
 			}
-			fs.writeFileSync(this.filePath, JSON.stringify(this.leads, null, 2), 'utf-8')
+			const payload = {
+				leads: this.leads,
+				behaviors: this.behaviors,
+				dynamicRules: this.dynamicRules
+			}
+			fs.writeFileSync(this.filePath, JSON.stringify(payload, null, 2), 'utf-8')
 		} catch (err) {
 			console.error('❌ فشل حفظ التحديثات في قاعدة البيانات:', err)
 		}
@@ -74,12 +92,67 @@ class JsonDatabase {
 	}
 
 	/**
-	 * فحص ما إذا كان نص الرسالة قد تم توجيهه وحفظه مسبقاً لمنع التكرار (Duplicate Prevention)
+	 * تحديث معرف رسالة التنبيه المرسلة لربط التفاعلات التلقائية
 	 */
-	public async hasLead(messageContent: string): Promise<boolean> {
+	public async updateLeadSentMessageId(leadId: string, sentMessageId: string): Promise<void> {
+		const lead = this.leads.find(l => l.id === leadId)
+		if (lead) {
+			lead.sentMessageId = sentMessageId
+			this.save()
+		}
+	}
+
+	/**
+	 * فحص ما إذا كان نص الرسالة قد تم توجيهه وحفظه مسبقاً لنفس رقم الطالب (Duplicate Prevention)
+	 */
+	public async hasLead(phone: string, messageContent: string): Promise<boolean> {
 		if (!messageContent) return false
 		const cleaned = messageContent.trim().toLowerCase()
-		return this.leads.some(l => l.messageContent.trim().toLowerCase() === cleaned)
+		return this.leads.some(l => l.studentPhone === phone && l.messageContent.trim().toLowerCase() === cleaned)
+	}
+
+	/**
+	 * جلب السجل السلوكي للمستخدم
+	 */
+	public async getUserBehavior(phone: string): Promise<UserBehavior> {
+		if (!this.behaviors[phone]) {
+			this.behaviors[phone] = {
+				phone,
+				pushName: 'غير مسجل',
+				helpRequestsCount: 0,
+				adsCount: 0,
+				trustScore: 0.5
+			}
+		}
+		return this.behaviors[phone]
+	}
+
+	/**
+	 * حفظ سلوك المستخدم
+	 */
+	public async saveUserBehavior(behavior: UserBehavior): Promise<void> {
+		this.behaviors[behavior.phone] = behavior
+		this.save()
+	}
+
+	/**
+	 * جلب القوانين الديناميكية للتعلم
+	 */
+	public async getDynamicRules(): Promise<DynamicRule[]> {
+		return this.dynamicRules
+	}
+
+	/**
+	 * حفظ أو تحديث قانون ديناميكي
+	 */
+	public async saveDynamicRule(rule: DynamicRule): Promise<void> {
+		const idx = this.dynamicRules.findIndex(r => r.key === rule.key)
+		if (idx >= 0) {
+			this.dynamicRules[idx] = rule
+		} else {
+			this.dynamicRules.push(rule)
+		}
+		this.save()
 	}
 }
 

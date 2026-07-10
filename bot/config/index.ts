@@ -8,6 +8,9 @@ export const config = {
 	// مفتاح Gemini API
 	GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 	
+	// مفتاح MiniMax API
+	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'sk-cp-qK-Bcm5TFCkOU9nOQDFYbvjCPsj2_Po2V40jdRbPSWowxck1QdfOflutKn-McEywj_KKydrGP8VOF7ezHG5RP6DIOTpDDcFw_jRgE_915XEfJxT1Zl2xZBM',
+	
 	// الحسابات النشطة للمراقبة
 	SESSIONS: ['account_1'],
 }

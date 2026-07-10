@@ -212,11 +212,11 @@ const startSock = async() => {
 			}
 
 			if(events['chats.delete']) {
-				logger.debug('chats deleted ', events['chats.delete'])
+				logger.debug({ chats: events['chats.delete'] }, 'chats deleted')
 			}
 
 			if(events['group.member-tag.update']) {
-				logger.debug('group member tag update', JSON.stringify(events['group.member-tag.update'], undefined, 2))
+				logger.debug({ update: events['group.member-tag.update'] }, 'group member tag update')
 			}
 		}
 	)

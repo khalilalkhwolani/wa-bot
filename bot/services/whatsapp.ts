@@ -11,10 +11,14 @@ import qrcode from 'qrcode-terminal'
 import path from 'path'
 import PQueue from 'p-queue'
 import { config, normalizeArabic } from '../config'
-import { shouldAnalyzeStudentLead, isSpamLinkText } from './ruleEngine'
-import { analyzeMessageWithAI } from './gemini'
-import { evaluateLead } from './scorer'
+import { isSpamLinkText } from './ruleEngine'
 import { db } from '../database/database'
+import { 
+	runSLIEPipeline, 
+	contextBuilder, 
+	processModeratorFeedback, 
+	SLIEMessage 
+} from '../slie'
 
 // إعداد السجلات بنفس الهيئة النظيفة
 const logger = P({
@@ -51,40 +55,39 @@ export async function startWhatsAppSession(sessionId: string) {
 
 	const sock = makeWASocket({
 		version,
-		logger,
+		logger: P({ level: 'silent' }),
+		printQRInTerminal: true,
 		auth: {
 			creds: state.creds,
 			keys: makeCacheableSignalKeyStore(state.keys, logger),
 		},
-		printQRInTerminal: false,
-		syncFullHistory: false,
+		generateHighQualityLinkPreview: true,
 	})
 
+	// حفظ حالة المصادقة عند التحديث
 	sock.ev.on('creds.update', saveCreds)
 
+	// التعامل مع تحديثات الاتصال وإعادة الاتصال الذكية
 	sock.ev.on('connection.update', async (update) => {
 		const { connection, lastDisconnect, qr } = update
 
 		if (qr) {
-			logger.info(`--------------------------------------------------`)
-			logger.info(`يرجى مسح الرمز المربع (QR Code) لتسجيل دخول الحساب [${sessionId}]:`)
-			logger.info(`--------------------------------------------------`)
+			logger.info(`📸 يرجى مسح رمز الـ QR التالي للاتصال بالحساب [${sessionId}]:`)
 			qrcode.generate(qr, { small: true })
 		}
 
 		if (connection === 'close') {
 			const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 			logger.error(`❌ انقطع الاتصال للحساب [${sessionId}]. السبب: ${lastDisconnect?.error}`)
+			
 			if (shouldReconnect) {
-				logger.info(`🔄 جاري إعادة الاتصال للحساب [${sessionId}] في غضون 5 ثوانٍ...`)
+				logger.info(`🔄 جاري محاولة إعادة الاتصال خلال 5 ثوانٍ للحساب [${sessionId}]...`)
 				setTimeout(() => startWhatsAppSession(sessionId), 5000)
 			} else {
-				logger.fatal(`🚨 تم تسجيل الخروج للحساب [${sessionId}]. يرجى مسح المجلد "${authFolder}" وإعادة التشغيل.`)
+				logger.error(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. يرجى إزالة المجلد ${authFolder} وإعادة التشغيل.`)
 			}
-		}
-
-		if (connection === 'open') {
-			logger.info(`🎉 تم تسجيل الدخول بنجاح للحساب [${sessionId}]!`)
+		} else if (connection === 'open') {
+			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]!`)
 			await lookupGroupJids(sock, sessionId)
 		}
 	})
@@ -96,6 +99,19 @@ export async function startWhatsAppSession(sessionId: string) {
 		for (const msg of upsert.messages) {
 			if (msg.key.fromMe) continue
 			if (msg.key.remoteJid && isJidNewsletter(msg.key.remoteJid)) continue
+
+			// 1. معالجة تفاعلات المشرفين بالرموز للتغذية الراجعة (Reaction Feedback)
+			if (msg.message?.reactionMessage) {
+				const reaction = msg.message.reactionMessage
+				const targetKey = reaction.key
+				const emoji = reaction.text || ''
+				
+				const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
+				if (leadsGroupJid && targetKey.remoteJid === leadsGroupJid) {
+					await handleModeratorReaction(sock, sessionId, targetKey.id || '', emoji)
+				}
+				continue
+			}
 
 			// استخراج النص المباشر
 			const text = msg.message?.conversation || 
@@ -115,7 +131,7 @@ export async function startWhatsAppSession(sessionId: string) {
 							 ''
 			}
 
-			// 1. معالجة الروابط المجمعة (Links Forwarding)
+			// 2. معالجة الروابط المجمعة (Links Forwarding)
 			if (text) {
 				const localLinksRegex = /https:\/\/chat\.whatsapp\.com\/(?:invite\/)?([a-zA-Z0-9]+)/gi
 				const links: { link: string; code: string }[] = []
@@ -129,9 +145,27 @@ export async function startWhatsAppSession(sessionId: string) {
 				}
 			}
 
-			// 2. معالجة طلبات مساعدة الطلاب (Student Leads)
+			// 3. معالجة طلبات مساعدة الطلاب عبر الأنبوب المعياري (SLIE Engine Pipeline)
 			if (text || quotedText) {
-				handleStudentLeadMessage(sock, sessionId, msg, text, quotedText)
+				const participantJid = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
+				const phone = participantJid.split('@')[0].split(':')[0]
+
+				const sliemMsg: SLIEMessage = {
+					id: msg.key.id || '',
+					remoteJid: msg.key.remoteJid || '',
+					participant: participantJid,
+					participantAlt: msg.key.participantAlt,
+					pushName: msg.pushName || 'غير مسجل',
+					text,
+					quotedText,
+					timestamp: msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now(),
+					rawMessage: msg
+				}
+
+				// استخدام محرك تجميع السياق (Context Builder) لدمج الرسائل المتتالية للمرسل خلال 10 ثوانٍ
+				contextBuilder.addMessage(sliemMsg, (combinedMsg) => {
+					handleStudentLeadMessage(sock, sessionId, combinedMsg)
+				})
 			}
 		}
 	})
@@ -179,109 +213,102 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 	queue.add(async () => {
 		const cleanLinks: string[] = []
 
-		for (const item of links) {
-			// فحص نص الرسالة الأصلي
-			if (isSpamLinkText(text)) {
-				logger.info(`🚫 [${sessionId}] حظر رابط (${item.link}) لاحتواء النص على كلمات محظورة.`)
-				continue
+		for (const linkObj of links) {
+			const linkTextToCheck = `${linkObj.link} ${text}`
+			if (!isSpamLinkText(linkTextToCheck)) {
+				cleanLinks.push(linkObj.link)
 			}
-
-			// فحص تفاصيل المجموعة عن بعد دون انضمام
-			try {
-				const info = await sock.groupGetInviteInfo(item.code)
-				if (info && (isSpamLinkText(info.subject) || (info.desc && isSpamLinkText(info.desc)))) {
-					logger.info(`🚫 [${sessionId}] حظر رابط مجموعة سبام/إعلانية: "${info.subject}"`)
-					continue
-				}
-			} catch (err) {
-				logger.warn(`⚠️ [${sessionId}] تعذر فحص معلومات الرابط (${item.code}) عبر السيرفر: ${err}. سيتم تمريره كاحتياط.`)
-			}
-
-			cleanLinks.push(item.link)
 		}
 
-		if (cleanLinks.length > 0) {
-			const combined = cleanLinks.join('\n')
-			const sleepTime = Math.floor(Math.random() * 4000) + 4000
-			await new Promise(resolve => setTimeout(resolve, sleepTime))
+		if (cleanLinks.length === 0) return
 
-			try {
-				await sock.sendMessage(linksGroupJid, { text: combined })
-				logger.info(`✅ [${sessionId}] تم توجيه الروابط المجمعة النظيفة:\n${combined}`)
-			} catch (err) {
-				logger.error(`❌ [${sessionId}] فشل توجيه الروابط: ${err}`)
-			}
+		// منع إرسال نفس الرابط المكرر في نفس المجموعة
+		const linkPhone = (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || '').split('@')[0].split(':')[0]
+		if (await db.hasLead(linkPhone, cleanLinks[0])) {
+			return
+		}
+
+		// حفظ الرابط كفرصة لتجنب التكرار
+		await db.insertLead({
+			studentPhone: linkPhone,
+			studentName: msg.pushName || 'غير مسجل',
+			originalGroup: 'روابط مجموعات',
+			messageContent: cleanLinks[0],
+			classification: 'DISCUSSION',
+			subject: 'رابط مجموعة',
+			score: 50,
+			confidence: 0.8
+		})
+
+		const alertMessage = `🔗 *رابط مجموعة واتساب للعمل:*
+${cleanLinks.join('\n')}`
+
+		try {
+			await sock.sendMessage(linksGroupJid, { text: alertMessage })
+			logger.info(`✅ [${sessionId}] تم توجيه الرابط بنجاح لمجموعة العمل.`)
+		} catch (err) {
+			logger.error(`❌ [${sessionId}] فشل توجيه الرابط لمجموعة العمل: ${err}`)
 		}
 	})
 }
 
 /**
- * معالجة وتصنيف وتوجيه طلبات مساعدة الطلاب
+ * معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE المعياري
  */
-async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, text: string, quotedText: string) {
-	// 1. تشغيل الفلتر السريع (Rule Engine) محلياً
-	if (!shouldAnalyzeStudentLead(text) && (!quotedText || !shouldAnalyzeStudentLead(quotedText))) {
-		return
-	}
-
+async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: SLIEMessage) {
 	const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
 	if (!leadsGroupJid) return
 
 	const queue = sessionLeadsQueues.get(sessionId)
 	if (!queue) return
 
-	// 2. التحقق من عدم تكرار الفرصة في قاعدة البيانات المحلية (Duplicate Check)
-	if (await db.hasLead(text)) {
-		logger.info(`🚫 [${sessionId}] تم تجاهل طلب مكرر للطالب [${msg.pushName}]`)
+	const participantJid = sliemMsg.participant
+	const phone = participantJid.split('@')[0].split(':')[0]
+
+	// 1. التحقق من عدم تكرار الفرصة في قاعدة البيانات المحلية (Duplicate Check)
+	if (await db.hasLead(phone, sliemMsg.text)) {
+		logger.info(`🚫 [${sessionId}] تم تجاهل طلب مكرر للطالب [${sliemMsg.pushName}]`)
 		return
 	}
 
 	queue.add(async () => {
-		logger.info(`🤖 [${sessionId}] جاري فحص الرسالة عبر الذكاء الاصطناعي...`)
+		logger.info(`🤖 [${sessionId}] جاري تمرير الرسالة عبر أنبوب SLIE المعياري...`)
 		
-		// 3. التحليل بواسطة Gemini AI
-		const analysis = await analyzeMessageWithAI(text, quotedText)
+		// 2. تشغيل الأنبوب المعياري بالكامل لـ SLIE (Engines 1-9)
+		const pipelineResult = await runSLIEPipeline(sliemMsg)
 
-		// 4. تقييم الفرصة وحساب النقاط
-		const evaluation = evaluateLead(analysis)
-		if (!evaluation.shouldNotify) {
-			logger.info(`🚫 [${sessionId}] استبعاد: ${evaluation.reason}`)
+		if (pipelineResult.decision === 'REJECT') {
+			logger.info(`🚫 [${sessionId}] استبعاد SLIE: ${pipelineResult.analysis.reason}`)
 			return
 		}
 
-		// استخراج رقم هاتف الطالب وصياغة رابط التواصل
-		let participantJid = msg.key.participantAlt || msg.key.participant || ''
-		if (!participantJid && msg.key.remoteJid && !msg.key.remoteJid.endsWith('@g.us')) {
-			participantJid = msg.key.remoteJid
-		}
+		const analysis = pipelineResult.analysis
+		let isLid = false
+		let resolvedParticipantJid = participantJid
+		let chatLink = ''
 
-		// محاولة فك معرّف LID إلى رقم الجوال الحقيقي باستخدام قاعدة بيانات الجلسة
-		if (participantJid && participantJid.includes('@lid')) {
+		// 3. فك معرف LID إذا كان مخفياً
+		if (resolvedParticipantJid && resolvedParticipantJid.includes('@lid')) {
 			try {
-				const lidUser = participantJid.split('@')[0].split(':')[0]
+				const lidUser = resolvedParticipantJid.split('@')[0].split(':')[0]
 				const stored = await sock.authState.keys.get('lid-mapping', [`${lidUser}_reverse`])
 				const pnUser = stored?.[`${lidUser}_reverse`]
 				if (pnUser && typeof pnUser === 'string') {
-					participantJid = pnUser.includes('@') ? pnUser : `${pnUser}@s.whatsapp.net`
-					logger.info(`✅ [${sessionId}] تم فك معرّف LID بنجاح إلى الرقم: ${participantJid}`)
+					resolvedParticipantJid = pnUser.includes('@') ? pnUser : `${pnUser}@s.whatsapp.net`
+					logger.info(`✅ [${sessionId}] تم فك معرّف LID بنجاح إلى الرقم: ${resolvedParticipantJid}`)
 				}
 			} catch (err) {
 				logger.warn(`⚠️ [${sessionId}] فشل فك معرّف LID: ${err}`)
 			}
 		}
 
-		let isLid = false
-		let phone = ''
-		let chatLink = ''
-
-		if (participantJid) {
-			if (participantJid.includes('@lid')) {
+		if (resolvedParticipantJid) {
+			if (resolvedParticipantJid.includes('@lid')) {
 				isLid = true
-				phone = participantJid.split('@')[0].split(':')[0]
 				chatLink = '🔒 (رقم مخفي بسبب إعدادات الخصوصية في مجتمعات واتساب)'
 			} else {
-				phone = participantJid.split('@')[0].split(':')[0]
-				chatLink = `https://wa.me/${phone}`
+				const resolvedPhone = resolvedParticipantJid.split('@')[0].split(':')[0]
+				chatLink = `https://wa.me/${resolvedPhone}`
 			}
 		} else {
 			chatLink = '⚠️ (تعذر استخراج رقم الهاتف)'
@@ -290,46 +317,46 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, msg: any, 
 		let originalGroup = 'مجموعة عامة'
 		let groupLink = ''
 		let groupDeepLink = ''
-		if (msg.key.remoteJid && msg.key.remoteJid.endsWith('@g.us')) {
-			groupDeepLink = `whatsapp://chat?jid=${msg.key.remoteJid}`
+		if (sliemMsg.remoteJid && sliemMsg.remoteJid.endsWith('@g.us')) {
+			groupDeepLink = `whatsapp://chat?jid=${sliemMsg.remoteJid}`
 			try {
-				const meta = await sock.groupMetadata(msg.key.remoteJid)
+				const meta = await sock.groupMetadata(sliemMsg.remoteJid)
 				originalGroup = meta.subject || 'مجموعة عامة'
 			} catch {
 				originalGroup = 'مجموعة واتساب'
 			}
 
 			try {
-				const code = await sock.groupInviteCode(msg.key.remoteJid)
+				const code = await sock.groupInviteCode(sliemMsg.remoteJid)
 				if (code) {
 					groupLink = `https://chat.whatsapp.com/${code}`
 				}
 			} catch {
-				// البوت ليس مشرفاً، طبيعي
+				// البوت ليس مشرفاً
 			}
 		}
 
-		// 5. حفظ الفرصة في قاعدة البيانات المحلية (Persistence)
+		// 4. حفظ الفرصة في قاعدة البيانات المحلية (Persistence)
 		const savedLead = await db.insertLead({
 			studentPhone: phone || 'غير معروف',
-			studentName: msg.pushName || 'غير مسجل',
+			studentName: sliemMsg.pushName || 'غير مسجل',
 			originalGroup,
-			messageContent: text,
+			messageContent: sliemMsg.text,
 			classification: analysis.classification,
 			subject: analysis.subject,
 			score: analysis.leadScore,
 			confidence: analysis.confidence
 		})
 
-		// صياغة الرسالة التنبيهية المبسطة والأنيقة
+		// 5. صياغة الرسالة التنبيهية التلقائية المبسطة
 		const alertMessage = `📝 *طلب مساعدة جديد (Lead)*
 
 👥 *المجموعة المصدر:* ${savedLead.originalGroup}
 👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
 
 💬 *الرسالة الأصلية:*
-"${text}"
-${quotedText ? `\n💬 *رد على رسالة:* "${quotedText}"` : ''}
+"${sliemMsg.text}"
+${sliemMsg.quotedText ? `\n💬 *رد على رسالة:* "${sliemMsg.quotedText}"` : ''}
 
 ${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupDeepLink ? `📱 *رابط الانتقال السريع للمجموعة:* ${groupDeepLink}\n` : ''}
 🔗 *رابط التواصل المباشر مع الطالب:*
@@ -339,10 +366,62 @@ ${chatLink}`
 		await new Promise(resolve => setTimeout(resolve, sleepTime))
 
 		try {
-			await sock.sendMessage(leadsGroupJid, { text: alertMessage })
+			const sent = await sock.sendMessage(leadsGroupJid, { text: alertMessage })
+			if (sent?.key?.id) {
+				// ربط معرف رسالة التنبيه بالـ Lead للاستماع للتغذية الراجعة
+				await db.updateLeadSentMessageId(savedLead.id, sent.key.id)
+			}
 			logger.info(`✅ [${sessionId}] تم توجيه الـ Lead بنجاح بالمعرف: ${savedLead.id}`)
 		} catch (err) {
 			logger.error(`❌ [${sessionId}] فشل إرسال تنبيه الطالب: ${err}`)
 		}
 	})
+}
+
+/**
+ * معالجة تفاعلات المشرفين بالرموز (👍 أو 👎) للتصحيح والتعلم الذاتي
+ */
+async function handleModeratorReaction(sock: any, sessionId: string, sentMessageId: string, emoji: string) {
+	try {
+		const isTrueHelp = emoji === '👍' || emoji === '✅'
+		const isFalseAd = emoji === '👎' || emoji === '❌'
+
+		if (!isTrueHelp && !isFalseAd) return // تجاهل الرموز الأخرى
+
+		const leads = await db.getLeads()
+		const lead = leads.find(l => l.sentMessageId === sentMessageId)
+
+		if (!lead) {
+			logger.warn(`⚠️ [${sessionId}] لم يتم العثور على Lead مطابق لمعرف الرسالة التفاعلية: ${sentMessageId}`)
+			return
+		}
+
+		logger.info(`🔄 [${sessionId}] جاري معالجة التغذية الراجعة للمشرف (الرمز: ${emoji}) للمعرف: ${lead.id}...`)
+		await processModeratorFeedback(lead.studentPhone, lead.messageContent, isTrueHelp)
+
+		// إرسال رد تأكيدي بسيط تحت التنبيه لتأكيد التعلم
+		const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
+		if (leadsGroupJid) {
+			const replyText = isTrueHelp 
+				? `✅ تم تأكيد الفرصة كـ طالب حقيقي! رفع مستوى ثقة سلوك هذا المستخدم في النظام.` 
+				: `❌ تم تصنيف الرسالة كـ إعلان كاذب! خصم معامل ثقة المرسل وتحديث فلاتر القواعد تلقائياً.`
+
+			await sock.sendMessage(leadsGroupJid, { 
+				text: replyText 
+			}, { 
+				quoted: {
+					key: {
+						remoteJid: leadsGroupJid,
+						id: sentMessageId,
+						fromMe: true
+					},
+					message: {
+						conversation: lead.messageContent
+					}
+				}
+			})
+		}
+	} catch (err) {
+		logger.error(`❌ [${sessionId}] فشل معالجة التغذية الراجعة للمشرف: ${err}`)
+	}
 }
