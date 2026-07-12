@@ -1,5 +1,6 @@
 import { config } from '../config'
 
+
 export interface AIAnalysisResult {
 	classification: 'HELP_REQUEST' | 'SERVICE_AD' | 'DISCUSSION' | 'OTHER'
 	confidence: number
@@ -44,13 +45,46 @@ async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
 	return JSON.parse(jsonText.trim())
 }
 
+async function tryGroq(prompt: string): Promise<AIAnalysisResult> {
+	const apiKey = config.GROQ_API_KEY
+	if (!apiKey) {
+		throw new Error('Groq API Key is not configured')
+	}
+
+	const url = 'https://api.groq.com/openai/v1/chat/completions'
+	const response = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Authorization': `Bearer ${apiKey}`
+		},
+		body: JSON.stringify({
+			model: 'llama-3.3-70b-versatile',
+			messages: [{ role: 'user', content: prompt }],
+			response_format: { type: 'json_object' },
+			temperature: 0.1
+		})
+	})
+
+	if (!response.ok) {
+		const errText = await response.text().catch(() => '')
+		throw new Error(`Groq API returned status ${response.status}: ${errText}`)
+	}
+
+	const data: any = await response.json()
+	const jsonText = data.choices?.[0]?.message?.content
+	if (!jsonText) throw new Error('Empty response from Groq')
+
+	return JSON.parse(jsonText.trim())
+}
+
 async function tryGemini(prompt: string): Promise<AIAnalysisResult> {
 	const apiKey = config.GEMINI_API_KEY
 	if (!apiKey) {
 		throw new Error('Gemini API Key is not configured')
 	}
 
-	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`
+	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
 	const response = await fetch(url, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -110,29 +144,37 @@ export async function analyzeMessageWithAI(text: string, quotedContext?: string)
 }
 `
 
-	// 1. محاولة الاتصال بـ MiniMax
+	// 1. محاولة الاتصال بـ Groq (الأسرع والأوفر)
 	try {
-		console.log('🤖 جاري فحص الرسالة عبر MiniMax...')
-		return await tryMiniMax(prompt)
-	} catch (minimaxErr: any) {
-		console.warn(`⚠️ فشل فحص الرسالة عبر MiniMax: ${minimaxErr.message || minimaxErr}`)
-		
-		// 2. محاولة الاتصال بـ Gemini في حال فشل الأول
+		console.log('⚡ [AI] جاري فحص الرسالة عبر Groq (llama-3.3-70b)...')
+		return await tryGroq(prompt)
+	} catch (groqErr: any) {
+		console.warn(`⚠️ [AI] فشل Groq: ${groqErr.message || groqErr}`)
+
+		// 2. محاولة MiniMax في حال فشل Groq
 		try {
-			console.log('🔄 محاولة بديلة: جاري فحص الرسالة عبر Gemini...')
-			return await tryGemini(prompt)
-		} catch (geminiErr: any) {
-			console.error(`❌ فشل فحص الرسالة عبر Gemini أيضاً: ${geminiErr.message || geminiErr}`)
-			
-			// 3. الرجوع للتصفية المحلية الافتراضية
-			return {
-				classification: 'HELP_REQUEST',
-				confidence: 0.50,
-				subject: 'خطأ اتصال بالذكاء الاصطناعي',
-				category: 'غير محدد',
-				urgency: 'Medium',
-				leadScore: 50,
-				reason: 'فشل الاتصال بـ MiniMax و Gemini، تم التمرير كاحتياط محلي'
+			console.log('🔄 [AI] محاولة بديلة عبر MiniMax...')
+			return await tryMiniMax(prompt)
+		} catch (minimaxErr: any) {
+			console.warn(`⚠️ [AI] فشل MiniMax: ${minimaxErr.message || minimaxErr}`)
+
+			// 3. محاولة Gemini كآخر بديل
+			try {
+				console.log('🔄 [AI] محاولة أخيرة عبر Gemini...')
+				return await tryGemini(prompt)
+			} catch (geminiErr: any) {
+				console.error(`❌ [AI] فشل كل الخدمات: ${geminiErr.message || geminiErr}`)
+
+				// 4. الرجوع للتصفية المحلية الاحتياطية
+				return {
+					classification: 'HELP_REQUEST',
+					confidence: 0.50,
+					subject: 'خطأ اتصال بالذكاء الاصطناعي',
+					category: 'غير محدد',
+					urgency: 'Medium',
+					leadScore: 50,
+					reason: 'فشل الاتصال بكل خدمات الذكاء الاصطناعي، تم التمرير احتياطياً'
+				}
 			}
 		}
 	}

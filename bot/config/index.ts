@@ -6,13 +6,19 @@ export const config = {
 	TARGET_LEADS_GROUP: 'طلبات الطلاب',
 	
 	// مفتاح Gemini API
-	GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+	GEMINI_API_KEY: process.env.GEMINI_API_KEY || 'AQ.Ab8RN6JBRB1fvWhTibqsPdcOLmaFe0eDhUkhQlhrtrUePNyeJA',
 	
-	// مفتاح MiniMax API
+	// مفتاح Groq API (الرئيسي - llama-3.3-70b سريع ومجاني)
+	GROQ_API_KEY: process.env.GROQ_API_KEY || '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',
+
+	// مفتاح MiniMax API (بديل ثانوي)
 	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'sk-cp-qK-Bcm5TFCkOU9nOQDFYbvjCPsj2_Po2V40jdRbPSWowxck1QdfOflutKn-McEywj_KKydrGP8VOF7ezHG5RP6DIOTpDDcFw_jRgE_915XEfJxT1Zl2xZBM',
 	
-	// الحسابات النشطة للمراقبة
-	SESSIONS: ['account_1'],
+	// الجلسات النشطة للمراقبة (account_1 للقراءة فقط، account_2 للإرسال فقط)
+	SESSIONS: ['account_1', 'account_2'],
+
+	// الجلسة المسؤولة عن توجيه الرسائل والإرسال للمجموعات
+	SENDER_SESSION: 'account_2',
 }
 
 /**

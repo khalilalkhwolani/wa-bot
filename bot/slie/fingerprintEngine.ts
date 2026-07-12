@@ -49,18 +49,18 @@ export function analyzeStructuralFingerprint(text: string): FingerprintAnalysis 
 		}
 	}
 
-	if (emojiLinesCount >= 3) {
+	if (emojiLinesCount >= 5) {
 		scoreReduction += 35;
 	}
 
 	// 3. تعداد القوائم النقطية العامة
 	const bulletPointsCount = (text.match(/[♦️🔹🔸📌✅•\-*]/g) || []).length;
-	if (bulletPointsCount >= 4) {
+	if (bulletPointsCount >= 6) {
 		scoreReduction += 20;
 	}
 
 	// 4. تحديد ما إذا كان الهيكل العام يطابق بصمة إعلانية مؤكدة
-	const isAdPattern = scoreReduction >= 35 || emojiLinesCount >= 4 || bulletPointsCount >= 6;
+	const isAdPattern = scoreReduction >= 40 || emojiLinesCount >= 6 || bulletPointsCount >= 8;
 
 	return {
 		isAdPattern,

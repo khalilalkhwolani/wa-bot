@@ -33,6 +33,9 @@ const logger = P({
 const sessionLinksGroupJids = new Map<string, string>()
 const sessionLeadsGroupJids = new Map<string, string>()
 
+// خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
+export const activeSockets = new Map<string, any>()
+
 // وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
 const botStartupTime = Date.now()
 
@@ -80,6 +83,7 @@ export async function startWhatsAppSession(sessionId: string) {
 		}
 
 		if (connection === 'close') {
+			activeSockets.delete(sessionId) // إزالة المقبس عند إغلاق الاتصال
 			const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 			logger.error(`❌ انقطع الاتصال للحساب [${sessionId}]. السبب: ${lastDisconnect?.error}`)
 			
@@ -90,6 +94,7 @@ export async function startWhatsAppSession(sessionId: string) {
 				logger.error(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. يرجى إزالة المجلد ${authFolder} وإعادة التشغيل.`)
 			}
 		} else if (connection === 'open') {
+			activeSockets.set(sessionId, sock) // حفظ المقبس عند نجاح الاتصال
 			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]!`)
 			await lookupGroupJids(sock, sessionId)
 		}
@@ -183,13 +188,32 @@ export async function startWhatsAppSession(sessionId: string) {
 }
 
 /**
- * البحث عن معرفات المجموعات المستهدفة عند الاتصال
+ * البحث عن معرفات المجموعات المستهدفة عند الاتصال وتعيينها بدقة
  */
 async function lookupGroupJids(sock: any, sessionId: string) {
 	try {
-		logger.info(`🔍 جاري البحث عن المجموعات المستهدفة للحساب [${sessionId}]...`)
+		logger.info(`🔍 جاري جلب كافة المجموعات التي يشارك فيها الحساب [${sessionId}]...`)
 		const groups = await sock.groupFetchAllParticipating()
 
+		// 1. طباعة قائمة بكافة المجموعات ومعرفاتها الفريدة في السجلات
+		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+		console.log(`📋 المجموعات النشطة للحساب [${sessionId}]:`)
+		for (const jid in groups) {
+			console.log(`   - الاسم: "${groups[jid].subject}" | المعرّف (JID): ${jid}`)
+		}
+		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+
+		// 2. التحقق من التعيين المباشر عبر معرفات JIDs الفريدة
+		if (config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us')) {
+			sessionLinksGroupJids.set(sessionId, config.TARGET_LINKS_GROUP)
+			logger.info(`🎯 تم تعيين مجموعة الروابط مباشرة بالمعرف الفريد (JID): ${config.TARGET_LINKS_GROUP}`)
+		}
+		if (config.TARGET_LEADS_GROUP && config.TARGET_LEADS_GROUP.endsWith('@g.us')) {
+			sessionLeadsGroupJids.set(sessionId, config.TARGET_LEADS_GROUP)
+			logger.info(`🎯 تم تعيين مجموعة الطلاب مباشرة بالمعرف الفريد (JID): ${config.TARGET_LEADS_GROUP}`)
+		}
+
+		// 3. البحث البديل بالاسم (في حال لم تكن الإعدادات JIDs)
 		const linksNorm = normalizeArabic(config.TARGET_LINKS_GROUP)
 		const leadsNorm = normalizeArabic(config.TARGET_LEADS_GROUP)
 
@@ -197,14 +221,29 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 			const subject = groups[jid].subject
 			const subjectNorm = normalizeArabic(subject)
 
-			if (subject === config.TARGET_LINKS_GROUP || subjectNorm === linksNorm) {
-				sessionLinksGroupJids.set(sessionId, jid)
-				logger.info(`✅ تم العثور على مجموعة الروابط: "${subject}" بالمعرف: ${jid}`)
+			// تعيين مجموعة الروابط بالاسم فقط إذا لم تكن معينة مسبقاً بـ JID
+			if (!sessionLinksGroupJids.has(sessionId)) {
+				if (subject === config.TARGET_LINKS_GROUP || subjectNorm === linksNorm) {
+					sessionLinksGroupJids.set(sessionId, jid)
+					logger.info(`✅ تم العثور على مجموعة الروابط بالاسم: "${subject}" بالمعرف: ${jid}`)
+				}
 			}
-			if (subject === config.TARGET_LEADS_GROUP || subjectNorm === leadsNorm) {
-				sessionLeadsGroupJids.set(sessionId, jid)
-				logger.info(`✅ تم العثور على مجموعة الطلاب: "${subject}" بالمعرف: ${jid}`)
+
+			// تعيين مجموعة الطلاب بالاسم فقط إذا لم تكن معينة مسبقاً بـ JID
+			if (!sessionLeadsGroupJids.has(sessionId)) {
+				if (subject === config.TARGET_LEADS_GROUP || subjectNorm === leadsNorm) {
+					sessionLeadsGroupJids.set(sessionId, jid)
+					logger.info(`✅ تم العثور على مجموعة الطلاب بالاسم: "${subject}" بالمعرف: ${jid}`)
+				}
 			}
+		}
+
+		// تحذير في حال عدم العثور على المجموعات المستهدفة
+		if (!sessionLinksGroupJids.has(sessionId)) {
+			logger.warn(`⚠️ لم يتم تحديد مجموعة الروابط المستهدفة [${config.TARGET_LINKS_GROUP}] للحساب [${sessionId}]`)
+		}
+		if (!sessionLeadsGroupJids.has(sessionId)) {
+			logger.warn(`⚠️ لم يتم تحديد مجموعة الطلاب المستهدفة [${config.TARGET_LEADS_GROUP}] للحساب [${sessionId}]`)
 		}
 	} catch (err) {
 		logger.error(`❌ فشل جلب المجموعات للحساب [${sessionId}]: ${err}`)
@@ -215,7 +254,8 @@ async function lookupGroupJids(sock: any, sessionId: string) {
  * معالجة وتصفية وتوجيه روابط المجموعات
  */
 async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: string, links: { link: string; code: string }[]) {
-	const linksGroupJid = sessionLinksGroupJids.get(sessionId)
+	const senderSessionId = (config as any).SENDER_SESSION || sessionId
+	const linksGroupJid = sessionLinksGroupJids.get(senderSessionId)
 	if (!linksGroupJid) return
 
 	const queue = sessionLinksQueues.get(sessionId)
@@ -254,11 +294,14 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 		const alertMessage = `🔗 *رابط مجموعة واتساب للعمل:*
 ${cleanLinks.join('\n')}`
 
+		// جلب مقبس الإرسال المخصص
+		const senderSock = activeSockets.get(senderSessionId) || sock
+
 		try {
-			await sock.sendMessage(linksGroupJid, { text: alertMessage })
-			logger.info(`✅ [${sessionId}] تم توجيه الرابط بنجاح لمجموعة العمل.`)
+			await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
+			logger.info(`✅ [${sessionId}] تم توجيه الرابط بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
 		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل توجيه الرابط لمجموعة العمل: ${err}`)
+			logger.error(`❌ [${sessionId}] فشل توجيه الرابط لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
 		}
 	})
 }
@@ -267,7 +310,8 @@ ${cleanLinks.join('\n')}`
  * معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE المعياري
  */
 async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: SLIEMessage) {
-	const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
+	const senderSessionId = (config as any).SENDER_SESSION || sessionId
+	const leadsGroupJid = sessionLeadsGroupJids.get(senderSessionId)
 	if (!leadsGroupJid) return
 
 	const queue = sessionLeadsQueues.get(sessionId)
@@ -376,15 +420,18 @@ ${chatLink}`
 		const sleepTime = Math.floor(Math.random() * 3000) + 2000
 		await new Promise(resolve => setTimeout(resolve, sleepTime))
 
+		// جلب مقبس الإرسال المخصص
+		const senderSock = activeSockets.get(senderSessionId) || sock
+
 		try {
-			const sent = await sock.sendMessage(leadsGroupJid, { text: alertMessage })
+			const sent = await senderSock.sendMessage(leadsGroupJid, { text: alertMessage })
 			if (sent?.key?.id) {
 				// ربط معرف رسالة التنبيه بالـ Lead للاستماع للتغذية الراجعة
 				await db.updateLeadSentMessageId(savedLead.id, sent.key.id)
 			}
-			logger.info(`✅ [${sessionId}] تم توجيه الـ Lead بنجاح بالمعرف: ${savedLead.id}`)
+			logger.info(`✅ [${sessionId}] تم توجيه الـ Lead بنجاح بالمعرف: ${savedLead.id} عبر [${senderSessionId}]`)
 		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل إرسال تنبيه الطالب: ${err}`)
+			logger.error(`❌ [${sessionId}] فشل إرسال تنبيه الطالب عبر [${senderSessionId}]: ${err}`)
 		}
 	})
 }

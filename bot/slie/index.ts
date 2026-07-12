@@ -37,7 +37,19 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 	);
 
 	// حالة الرفض الصارم الفوري
+	const tag = phone;
+
+	console.log(`\n${'═'.repeat(60)}`);
+	console.log(`📨 [SLIE] رسالة جديدة من: ${tag}`);
+	console.log(`📝 النص (أول 50 حرف): "${message.text.slice(0, 50).replace(/\n/g, ' ')}${message.text.length > 50 ? '...' : ''}"`);
+	console.log(`🔹 نتيجة النية المحلية : intent=${intent} | localScore=${localScore}`);
+	console.log(`🔍 بصمة التنسيق    : isAd=${fingerprint.isAdPattern} | emojiLines=${fingerprint.emojiLinesCount} | bullets=${fingerprint.bulletPointsCount} | scoreReduction=-${fingerprint.scoreReduction} | wa.link=${fingerprint.hasDirectContactLink}`);
+	console.log(`📊 تقييم المستخدم  : trustScore=${behavior.trustScore}`);
+	console.log(`✅ الثقة النهائية  : confidence=${(confidence * 100).toFixed(1)}% | القرار=${routingDecision}`);
+
 	if (routingDecision === 'REJECT') {
+		console.log(`🚨 [SLIE] قرار: رفض محلي | السبب: بصمة إعلانية أو نقاط سلبية`);
+		console.log(`${'═'.repeat(60)}\n`);
 		return {
 			decision: 'REJECT',
 			analysis: {
@@ -54,6 +66,8 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 
 	// حالة التمرير المباشر دون AI (لتوفير التكلفة للموثوقين)
 	if (routingDecision === 'PASS') {
+		console.log(`✨ [SLIE] قرار: تمرير مباشر (PASS) | المستخدم موثوق أو نقاط عالية`);
+		console.log(`${'═'.repeat(60)}\n`);
 		const qualityScore = calculateLeadQualityScore(message.text, 'غير محدد');
 		return {
 			decision: 'PASS',
@@ -70,11 +84,15 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 	}
 
 	// 6. منطقة الشك: استدعاء الذكاء الاصطناعي (Gemini)
+	console.log(`🤖 [SLIE] قرار: منطقة رمادية → إرسال للذكاء الاصطناعي...`);
 	try {
 		const aiResult = await analyzeGrayZoneWithAI(message);
 		const isHelp = aiResult.classification === 'HELP_REQUEST';
+		console.log(`💡 [AI] النتيجة: ${aiResult.classification} | ثقة=${(aiResult.confidence * 100).toFixed(1)}% | المادة="${aiResult.subject}" | السبب: ${aiResult.reason}`);
 
 		if (!isHelp) {
+			console.log(`🚨 [AI] قرار: رفض (ليس طلب مساعدة)`);
+			console.log(`${'═'.repeat(60)}\n`);
 			return {
 				decision: 'REJECT',
 				analysis: {
@@ -91,6 +109,8 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 
 		// حساب جودة الـ Lead الأكاديمي
 		const qualityScore = calculateLeadQualityScore(message.text, aiResult.subject);
+		console.log(`✅ [AI] قرار: تمرير (PASS) | LeadScore=${qualityScore}`);
+		console.log(`${'═'.repeat(60)}\n`);
 
 		return {
 			decision: 'PASS',
@@ -105,18 +125,24 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 			}
 		};
 	} catch (err) {
-		// نظام الـ Fallback عند تعطل الـ API
+		// نظام الـ Fallback عند تعطل الـ AI كلياً
 		const qualityScore = calculateLeadQualityScore(message.text, 'غير محدد');
+		// خفضنا العتبة من 45 إلى 20 لأن الـ AI معطل ولا يجب حرمان الطلاب الحقيقيين
+		const isLikelyHelp = localScore >= 20;
+		console.log(`⚠️  [SLIE] فشل كلا AI | النقاط المحلية=${localScore} → Fallback: ${isLikelyHelp ? 'PASS' : 'REJECT'}`);
+		console.log(`${'═'.repeat(60)}\n`);
 		return {
-			decision: 'PASS', // نمررها كوقاية لكي لا يضيع طلب الطالب
+			decision: isLikelyHelp ? 'PASS' : 'REJECT',
 			analysis: {
-				classification: 'ASK_HELP',
+				classification: isLikelyHelp ? 'ASK_HELP' : 'DISCUSSION',
 				confidence: 0.5,
-				subject: 'معلق بسبب انقطاع الخدمة',
-				category: 'Fallback',
+				subject: isLikelyHelp ? 'غير محدد' : 'معلق بسبب انقطاع الخدمة',
+				category: isLikelyHelp ? 'Fallback محلي' : 'Fallback مرفوض',
 				urgency: 'Medium',
 				leadScore: qualityScore,
-				reason: `تم التمرير الوقائي بسبب تعطل الـ AI: ${err}`
+				reason: isLikelyHelp
+					? `تم التمرير احتياطياً لوجود مؤشرات طلب مساعدة (نقاط: ${localScore}) - الذكاء الاصطناعي غير متاح حالياً`
+					: `تم الرفض لعدم كفاية المؤشرات (نقاط: ${localScore}) - الذكاء الاصطناعي غير متاح حالياً`
 			}
 		};
 	}
