@@ -17,7 +17,7 @@ async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
 		throw new Error('MiniMax API Key is not configured')
 	}
 
-	const url = 'https://api.minimax.io/v1/chat/completions'
+	const url = 'https://inference.dahl.global/v1/chat/completions'
 	const response = await fetch(url, {
 		method: 'POST',
 		headers: { 
@@ -25,11 +25,10 @@ async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
 			'Authorization': `Bearer ${apiKey}`
 		},
 		body: JSON.stringify({
-			model: 'MiniMax-M3',
+			model: 'MiniMaxAI/MiniMax-M2.7',
 			messages: [
 				{ role: 'user', content: prompt }
-			],
-			response_format: { type: 'json_object' }
+			]
 		})
 	})
 
@@ -39,8 +38,13 @@ async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
 	}
 
 	const data: any = await response.json()
-	const jsonText = data.choices?.[0]?.message?.content
+	let jsonText = data.choices?.[0]?.message?.content
 	if (!jsonText) throw new Error('Empty response from MiniMax')
+
+	// إزالة وسوم التفكير <think>...</think> التي قد يرجعها النموذج لتفادي فشل الـ JSON.parse
+	if (jsonText.includes('</think>')) {
+		jsonText = jsonText.split('</think>').pop() || ''
+	}
 
 	return JSON.parse(jsonText.trim())
 }
@@ -112,36 +116,48 @@ async function tryGemini(prompt: string): Promise<AIAnalysisResult> {
  * خدمة الاتصال بالذكاء الاصطناعي مع دعم سلاسل بديلة (MiniMax -> Gemini -> Fallback محلي)
  */
 export async function analyzeMessageWithAI(text: string, quotedContext?: string): Promise<AIAnalysisResult> {
-	const prompt = `
-أنت محلل محادثات أكاديمي وخبير في تصفية وتصنيف رسائل الطلاب واستخراج الفرص (Leads).
-مهمتك هي قراءة الرسالة الواردة (وقراءة سياق الرسالة المقتبسة إن وجد) وتصنيفها بدقة تامة.
+	const prompt = `أنت مصنّف رسائل دقيق جداً. مهمتك الوحيدة: هل هذه الرسالة طلب خدمة أكاديمية حقيقي يمكن بيعه كخدمة (حل واجب، شرح مادة، حل اختبار، مشروع تخرج، كتابة بحث) أم لا؟
 
-سياق الرسالة المقتبسة (Quoted Message Context):
-"${quotedContext || 'لا يوجد'}"
+=== تعريف HELP_REQUEST الصارم ===
+صنّف كـ HELP_REQUEST فقط وحصرياً إذا تحققت كل الشروط التالية معاً:
+1. الطالب يطلب شيئاً أكاديمياً محدداً (واجب، اختبار، شرح مادة، مشروع، بحث، ملخص، كتاب، خطة دراسية)
+2. الطلب يمكن أن يؤدى كخدمة مدفوعة من شخص آخر
+3. الرسالة ليست مجرد دردشة أو سؤال عام في محادثة جارية
 
-الرسالة الواردة للتحليل (Incoming Message):
-"${text}"
+=== أمثلة على HELP_REQUEST الصحيحة ===
+- "ابي احد يحل لي واجب جافا" ← HELP_REQUEST (طلب حل واجب محدد)
+- "ابغى ملخص فيزياء الفاينل" ← HELP_REQUEST (طلب ملخص مادة)
+- "من يمسك لي مشروع تخرج" ← HELP_REQUEST (طلب خدمة مشروع)
+- "ابغى كتب المناقشة عبد ربه والتميمي" ← HELP_REQUEST (طلب مواد دراسية محددة)
+- "ابغى خطة الطالبات حق تخصص علوم التغذية" ← HELP_REQUEST (طلب خطة دراسية)
+- "تكفون احد يشرح لي قواعد بيانات" ← HELP_REQUEST (طلب شرح مادة)
+- "محتاج حل اسايمنت احصاء ضروري" ← HELP_REQUEST (طلب حل واجب)
 
-تعليمات التصنيف الصارمة:
-1. تصنيف HELP_REQUEST: إذا كان مرسل الرسالة هو طالب يطلب مساعدة لنفسه في واجب، اختبار، شرح، أو مشروع تخرج (سواء بلهجة سعودية أو يمنية أو عامية).
-2. تصنيف SERVICE_AD: إذا كان مرسل الرسالة هو معلن يعلن عن تقديم خدمات، أو يعيد توجيه الطلاب لأرقام أو مجموعات أخرى، أو يوصي برقم آخر (حتى لو كتب بلهجة طالب).
-3. تصنيف DISCUSSION: نقاش أو دردشة عادية بين الطلاب دون طلب مساعدة حقيقية.
-4. تصنيف OTHER: أي رسائل سلام، ترحيب، أو خارج السياق الدراسي.
+=== أمثلة على DISCUSSION (ليست طلبات مساعدة) - مهم جداً ===
+- "ابي بريك بين كل تسميعه والثانيه" ← DISCUSSION (دردشة عن جدول شخصي)
+- "الأبواب مقفلة كلها لو ابي اجلس فيها" ← DISCUSSION (سؤال عام عن مكان)
+- "ابي الاكيد بالله" ← DISCUSSION (تأكيد في محادثة عادية)
+- "انا عندي تدريب صيفي واي غياب يأثر" ← DISCUSSION (مشاركة موقف شخصي)
+- "عادي بنفس محاضرتها اذا قلتي لها" ← DISCUSSION (نصيحة بين طالبات)
+- "راسليه على المودل" ← DISCUSSION (توجيه عام)
+- "متى الاختبار؟" ← DISCUSSION (سؤال عام وليس طلب خدمة)
+- "وش رايكم في الدكتور فلان" ← DISCUSSION (رأي)
+- "انا عنده" ← DISCUSSION (رد قصير في محادثة)
 
-اللهجات المساعدة:
-- اللهجة السعودية والخليجية: (أبي/أبغا أحد يحل لي، مبتلش في واجب، فزعتكم يا رجال، تكفون، منهو يعرف).
-- اللهجة اليمنية: (أشتي/يشتي حل، من يمسك واجب، ما سبرش معي الكود).
+=== القاعدة الذهبية ===
+كلمات مثل "ابي" و"ابغى" و"أشتي" لا تعني بالضرورة طلب مساعدة أكاديمية!
+هذه كلمات يومية عادية تستخدم في كل المحادثات العربية.
+يجب أن يكون هناك سياق أكاديمي واضح (اسم مادة، نوع مهمة) حتى تصنفها HELP_REQUEST.
 
-يجب أن تعيد النتيجة بصيغة JSON فقط ككائن يحتوي على الحقول التالية وبدون أي تعليقات أو نصوص إضافية:
-{
-  "classification": "HELP_REQUEST" | "SERVICE_AD" | "DISCUSSION" | "OTHER",
-  "confidence": number (من 0.0 إلى 1.0),
-  "subject": string (اسم المادة الدراسية، مثلاً: "جافا", "رياضيات", "فيزياء" أو "غير محدد"),
-  "category": string (نوع الطلب، مثلاً: "واجب", "اختبار", "مشروع تخرج", "شرح" أو "غير محدد"),
-  "urgency": "High" | "Medium" | "Low",
-  "leadScore": number (درجة جودة الفرصة من 0 إلى 100 بناءً على رغبة الطالب في الدفع أو عجلة الطلب),
-  "reason": string (شرح بسيط ومختصر باللغة العربية لسبب هذا التصنيف)
-}
+=== تصنيفات أخرى ===
+- SERVICE_AD: إعلان عن تقديم خدمات أكاديمية ("من يبي واجبات يراسلني"، "نقدم لكم خدمات")
+- OTHER: سلام، شكر، رسائل خارج السياق
+
+سياق الرسالة المقتبسة: "${quotedContext || 'لا يوجد'}"
+الرسالة: "${text}"
+
+أعد النتيجة كـ JSON فقط بدون أي نص إضافي:
+{"classification":"HELP_REQUEST"|"SERVICE_AD"|"DISCUSSION"|"OTHER","confidence":number,"subject":string,"category":string,"urgency":"High"|"Medium"|"Low","leadScore":number,"reason":string}
 `
 
 	// 1. محاولة الاتصال بـ Groq (الأسرع والأوفر)

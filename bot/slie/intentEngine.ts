@@ -17,14 +17,22 @@ export const DEFAULT_HELP_VERBS = [
 	'يقدر', 'تقدر', 'يفزع', 'تفزع', 'يدرس', 'تدرس'
 ].map(normalizeArabicText);
 
-// تعبيرات الفزعة والطلب الافتراضية
-export const DEFAULT_HELP_EXPRESSIONS = [
-	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده', 'مساعده',
-	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي', 'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
-	'ضايع', 'مش فاهم', 'مو فاهم', 'ما عرفت', 'ما فهمت', 'صعب علي', 'مين يعرف', 'أحد يعرف', 'احد يعرف',
-	'مين يقدر', 'أحد يقدر', 'احد يقدر', 'مين يحل', 'أحد يحل', 'احد يحل', 'مين يمسك', 'أحد يمسك', 'احد يمسك',
-	'من يحل', 'من يمسك', 'من يساعد', 'من يفهم', 'من يشرح', 'من يسوي', 'من يعرف', 'كيف احل', 'طريقة حل', 
-	'شرح طريقة', 'ابغا فزعه', 'ابي فزعه', 'شلو واجب', 'امسكوا واجب', 'يسعفني'
+// تعبيرات الطلب القوية: هذه تدل بوضوح على طلب مساعدة (تعطي نقاط مباشرة)
+export const DEFAULT_STRONG_HELP_EXPRESSIONS = [
+	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده',
+	'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
+	'ضايع', 'مش فاهم', 'مو فاهم', 'ما عرفت', 'ما فهمت', 'صعب علي',
+	'مين يحل', 'أحد يحل', 'احد يحل', 'مين يمسك', 'أحد يمسك', 'احد يمسك',
+	'من يحل', 'من يمسك', 'من يساعد', 'من يشرح', 'من يسوي',
+	'كيف احل', 'طريقة حل', 'شرح طريقة',
+	'ابغا فزعه', 'ابي فزعه', 'شلو واجب', 'امسكوا واجب', 'يسعفني',
+	'مين يعرف', 'أحد يعرف', 'احد يعرف', 'من يعرف',
+	'مين يقدر', 'أحد يقدر', 'احد يقدر'
+].map(normalizeArabicText);
+
+// تعبيرات طلب ضعيفة: هذه كلمات يومية عادية (ابي، ابغى، أشتي) لا تعطي نقاط إلا مع سياق أكاديمي
+export const DEFAULT_WEAK_DESIRE_WORDS = [
+	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي'
 ].map(normalizeArabicText);
 
 // العبارات الإعلانية الترويجية المحظورة افتراضياً
@@ -56,17 +64,26 @@ export function classifyIntentLocally(
 	// دمج القواعد الافتراضية مع الديناميكية المستخلصة من قاعدة البيانات
 	const studyNouns = [...DEFAULT_STUDY_NOUNS, ...dynamicRules.filter(r => r.category === 'STUDY_NOUN').map(r => r.key)];
 	const helpVerbs = [...DEFAULT_HELP_VERBS, ...dynamicRules.filter(r => r.category === 'HELP_VERB').map(r => r.key)];
-	const helpExpressions = [...DEFAULT_HELP_EXPRESSIONS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight > 0).map(r => r.key)];
+	const strongHelpExpressions = [...DEFAULT_STRONG_HELP_EXPRESSIONS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight > 0).map(r => r.key)];
+	const weakDesireWords = [...DEFAULT_WEAK_DESIRE_WORDS];
 	const adKeywords = [...DEFAULT_AD_KEYWORDS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight < 0).map(r => r.key)];
 
 	let score = 0;
 
-	// 1. التحقق من التعبيرات الإيجابية (مع سقف أعلى بـ 60 نقطة لمنع التضخم التراكمي)
-	const matchedExpressions = helpExpressions.filter(word => normalizedText.includes(word));
-	score += Math.min(60, matchedExpressions.length * 30);
-
 	const matchedNouns = studyNouns.filter(word => normalizedText.includes(word));
 	const matchedVerbs = helpVerbs.filter(word => normalizedText.includes(word));
+
+	// 1. التحقق من التعبيرات القوية (فزعه، ساعدوني، محتاج...) → نقاط مباشرة
+	const matchedStrongExpressions = strongHelpExpressions.filter(word => normalizedText.includes(word));
+	score += Math.min(60, matchedStrongExpressions.length * 30);
+
+	// 2. التحقق من الكلمات الضعيفة (ابي، ابغى، أشتي) → نقاط فقط إذا ترافقت مع سياق أكاديمي
+	const matchedWeakDesire = weakDesireWords.filter(word => normalizedText.includes(word));
+	if (matchedWeakDesire.length > 0 && (matchedNouns.length > 0 || matchedVerbs.length > 0)) {
+		// "ابي + واجب" أو "ابغى + حل" = طلب مساعدة حقيقي
+		score += 30;
+	}
+	// ملاحظة: "ابي" بدون سياق أكاديمي لا تعطي أي نقاط (دردشة عادية)
 
 	if (matchedNouns.length > 0 && matchedVerbs.length > 0) {
 		score += 25; // نقاط إضافية عند ترابط اسم دراسي مع فعل طلب مساعدة
