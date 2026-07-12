@@ -8,6 +8,9 @@
 export function normalizeArabicText(text: string): string {
 	if (!text) return '';
 	return text
+		// إزالة رموز البوت الداخلية التي يضيفها contextBuilder (▫️ للرسائل العادية و ↪️ للردود)
+		.replace(/▫️\s*/g, '')
+		.replace(/↪️\s*/g, '')
 		.toLowerCase()
 		.replace(/[أإآ]/g, 'ا')
 		.replace(/ة/g, 'ه')

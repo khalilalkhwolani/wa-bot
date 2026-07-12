@@ -34,12 +34,16 @@ export function analyzeStructuralFingerprint(text: string): FingerprintAnalysis 
 	}
 
 	// 2. تعداد الأسطر النقطية التي تبدأ برموز تعبيرية ومؤشرات
+	// ملاحظة: رموز ▫️ و ↪️ يضيفها contextBuilder نفسه لتمييز الرسائل المتتالية، لذا يجب تجاهلها هنا
+	const BOT_MARKERS = ['▫️', '↪️'];
 	const lines = text.split('\n');
 	let emojiLinesCount = 0;
 	for (const line of lines) {
 		const trimmed = line.trim();
 		if (trimmed) {
-			if (/^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
+			// تجاهل الأسطر التي تبدأ برموز البوت الداخلية (ليست إعلانات)
+			const startsWithBotMarker = BOT_MARKERS.some(marker => trimmed.startsWith(marker));
+			if (!startsWithBotMarker && /^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
 				emojiLinesCount++;
 			}
 		}
