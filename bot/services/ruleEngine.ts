@@ -107,5 +107,61 @@ export function shouldAnalyzeStudentLead(text: string): boolean {
 export function isSpamLinkText(text: string): boolean {
 	if (!text) return false
 	const normalizedText = normalizeArabicSearch(text)
-	return BLACKLIST_KEYWORDS.some(keyword => normalizedText.includes(keyword))
+
+	// 1. التحقق من الكلمات المحظورة التقليدية (السبام والخدمات العامة)
+	const hasBlacklistKeyword = BLACKLIST_KEYWORDS.some(keyword => normalizedText.includes(keyword))
+	if (hasBlacklistKeyword) return true
+
+	// 2. التحقق من العبارات الإعلانية للخدمات الأكاديمية التجارية
+	const AD_KEYWORDS_FOR_LINKS = [
+		'خدمات طلابيه', 'خدمات اكاديميه', 'خدمات طلابية', 'خدمات أكاديمية',
+		'نوفر لكم', 'نقدم لكم', 'مستعدون', 'مستعدين', 'حلول مضمونه', 'حلول مضمونة',
+		'اسعار مناسبه', 'أسعار مناسبة', 'شعارنا الامانه', 'شعارنا الأمانة',
+		'مكتبه', 'مكتبة', 'مكتب التميز', 'مكتبة التميز', 'كادر', 'قروب للحل', 'مجموعة للحل',
+		'للتواصل عبر', 'للتواصل واتساب', 'للتواصل خاص', 'راسلني خاص', 'تواصل خاص',
+		'بحوث علميه', 'بحوث علمية', 'عروض بوربوينت', 'مشاريع تخرج', 'سيره ذاتيه', 'سيرة ذاتية'
+	].map(normalizeArabicSearch)
+
+	const hasAdKeyword = AD_KEYWORDS_FOR_LINKS.some(keyword => normalizedText.includes(keyword))
+	if (hasAdKeyword) return true
+
+	// 3. التحقق من كلمات غير دراسية / سبام عام
+	const GENERAL_SPAM_KEYWORDS = [
+		'تعارف', 'سهرة', 'سهرات', 'دردشة', 'دردشه',
+		'ضحك', 'وناسة', 'وناسه', 'فله', 'فلة', 'قروب نشر', 'قروب تبادل',
+		'نشر روابط', 'تبادل روابط', 'حراج', 'شدات ببجي', 'زيادة متابعين', 
+		'دعم متابعين', 'متابعين انستا', 'ربح', 'تداول', 'استثمار',
+		'منصة', 'بروموكود', 'كود خصم', 'كوبون', 'وظائف', 'وظايف', 'توظيف'
+	].map(normalizeArabicSearch)
+
+	const hasGeneralSpam = GENERAL_SPAM_KEYWORDS.some(keyword => normalizedText.includes(keyword))
+	if (hasGeneralSpam) return true
+
+	// 4. التحقق من وجود رقم هاتف أو رابط اتصال مباشر (المعلنون يضعون أرقامهم أو روابط wa.me للطلب المباشر)
+	if (text.includes('wa.me/') || text.includes('wa.link/') || text.includes('api.whatsapp.com/send')) {
+		return true
+	}
+	const cleanDigitsOnly = text.replace(/\s+/g, '')
+	const hasPhoneNumber = /(\+?96[67]\d{7,12})|(\b05\d{8}\b)/.test(cleanDigitsOnly)
+	if (hasPhoneNumber) {
+		return true
+	}
+
+	// 5. التحقق من البصمة الهيكلية للإعلان (تعدد رموز القوائم والنقاط في رسالة الرابط)
+	const lines = text.split('\n')
+	let symbolLines = 0
+	for (const line of lines) {
+		const trimmed = line.trim()
+		if (trimmed) {
+			if (/^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
+				symbolLines++
+			}
+		}
+	}
+	if (symbolLines >= 3) return true
+
+	const bulletPoints = (text.match(/[♦️🔹🔸📌✅•\-*]/g) || []).length
+	if (bulletPoints >= 4) return true
+
+	return false
 }

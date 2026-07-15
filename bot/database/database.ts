@@ -112,6 +112,15 @@ class JsonDatabase {
 	}
 
 	/**
+	 * فحص ما إذا كان الرابط قد تم توجيهه مسبقاً من أي مستخدم (منع التكرار العالمي للروابط)
+	 */
+	public async hasLinkBeenSent(link: string): Promise<boolean> {
+		if (!link) return false
+		const cleaned = link.trim().toLowerCase()
+		return this.leads.some(l => l.messageContent.trim().toLowerCase() === cleaned)
+	}
+
+	/**
 	 * جلب السجل السلوكي للمستخدم
 	 */
 	public async getUserBehavior(phone: string): Promise<UserBehavior> {

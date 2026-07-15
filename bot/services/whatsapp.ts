@@ -273,9 +273,8 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 
 		if (cleanLinks.length === 0) return
 
-		// منع إرسال نفس الرابط المكرر في نفس المجموعة
-		const linkPhone = (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || '').split('@')[0].split(':')[0]
-		if (await db.hasLead(linkPhone, cleanLinks[0])) {
+		// منع إرسال نفس الرابط المكرر على الإطلاق (تجنب التكرار العالمي للرابط نفسه)
+		if (await db.hasLinkBeenSent(cleanLinks[0])) {
 			return
 		}
 
