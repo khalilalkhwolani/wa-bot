@@ -121,8 +121,8 @@ export async function startWhatsAppSession(sessionId: string) {
 				const emoji = reaction.text || ''
 				
 				const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
-				if (leadsGroupJid && targetKey.remoteJid === leadsGroupJid) {
-					await handleModeratorReaction(sock, sessionId, targetKey.id || '', emoji)
+				if (leadsGroupJid && targetKey?.remoteJid === leadsGroupJid) {
+					await handleModeratorReaction(sock, sessionId, targetKey?.id || '', emoji)
 				}
 				continue
 			}
@@ -277,6 +277,9 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 		if (await db.hasLinkBeenSent(cleanLinks[0])) {
 			return
 		}
+
+		const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
+		const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
 
 		// حفظ الرابط كفرصة لتجنب التكرار
 		await db.insertLead({

@@ -1,19 +1,19 @@
 export const config = {
 	// اسم المجموعة المستهدفة لتوجيه روابط مجموعات واتساب
 	TARGET_LINKS_GROUP: 'العمل',
-	
+
 	// اسم المجموعة المستهدفة لتوجيه طلبات مساعدة الطلاب (Leads)
 	TARGET_LEADS_GROUP: 'طلبات الطلاب',
-	
+
 	// مفتاح Gemini API
 	GEMINI_API_KEY: process.env.GEMINI_API_KEY || 'AQ.Ab8RN6JBRB1fvWhTibqsPdcOLmaFe0eDhUkhQlhrtrUePNyeJA',
-	
+
 	// مفتاح Groq API (الرئيسي - llama-3.3-70b سريع ومجاني)
 	GROQ_API_KEY: process.env.GROQ_API_KEY || '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',
 
 	// مفتاح MiniMax API (بديل ثانوي)
-	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'sk-cp-qK-Bcm5TFCkOU9nOQDFYbvjCPsj2_Po2V40jdRbPSWowxck1QdfOflutKn-McEywj_KKydrGP8VOF7ezHG5RP6DIOTpDDcFw_jRgE_915XEfJxT1Zl2xZBM',
-	
+	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'dahl_C6h9Xz53HBtjmT1kKK2GpPqoLvJvQW1Ki',
+
 	// الجلسات النشطة للمراقبة (account_1 للقراءة فقط، account_2 للإرسال فقط)
 	SESSIONS: ['account_1', 'account_2'],
 
