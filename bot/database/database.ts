@@ -21,7 +21,6 @@ class JsonDatabase {
 	private leads: Lead[] = []
 	private behaviors: { [phone: string]: UserBehavior } = {}
 	private dynamicRules: DynamicRule[] = []
-	private linkCounter = 0
 
 	constructor() {
 		this.load()
@@ -41,7 +40,6 @@ class JsonDatabase {
 					this.leads = parsed.leads || []
 					this.behaviors = parsed.behaviors || {}
 					this.dynamicRules = parsed.dynamicRules || []
-					this.linkCounter = typeof parsed.linkCounter === 'number' ? parsed.linkCounter : 0
 				}
 			}
 		} catch (err) {
@@ -49,7 +47,6 @@ class JsonDatabase {
 			this.leads = []
 			this.behaviors = {}
 			this.dynamicRules = []
-			this.linkCounter = 0
 		}
 	}
 
@@ -65,22 +62,12 @@ class JsonDatabase {
 			const payload = {
 				leads: this.leads,
 				behaviors: this.behaviors,
-				dynamicRules: this.dynamicRules,
-				linkCounter: this.linkCounter
+				dynamicRules: this.dynamicRules
 			}
 			fs.writeFileSync(this.filePath, JSON.stringify(payload, null, 2), 'utf-8')
 		} catch (err) {
 			console.error('❌ فشل حفظ التحديثات في قاعدة البيانات:', err)
 		}
-	}
-
-	/**
-	 * زيادة عداد الروابط العالمي وإرجاع الرقم التالي (يبقى بعد إعادة التشغيل)
-	 */
-	public async nextLinkNumber(): Promise<number> {
-		this.linkCounter += 1
-		this.save()
-		return this.linkCounter
 	}
 
 	/**
