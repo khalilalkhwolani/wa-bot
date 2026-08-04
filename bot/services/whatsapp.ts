@@ -33,9 +33,6 @@ const logger = P({
 const sessionLinksGroupJids = new Map<string, string>()
 const sessionLeadsGroupJids = new Map<string, string>()
 
-// أسماء المجموعات المخزّنة عند الاتصال (Session ID -> JID -> subject) لتجنب استدعاء groupMetadata الذي يعلّق الطابور
-const sessionGroupNames = new Map<string, Map<string, string>>()
-
 // خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
 export const activeSockets = new Map<string, any>()
 
@@ -198,17 +195,13 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 		logger.info(`🔍 جاري جلب كافة المجموعات التي يشارك فيها الحساب [${sessionId}]...`)
 		const groups = await sock.groupFetchAllParticipating()
 
-		// 1. طباعة قائمة بكافة المجموعات وتخزين أسمائها محلياً
-		const names = new Map<string, string>()
+		// 1. طباعة قائمة بكافة المجموعات ومعرفاتها الفريدة في السجلات
 		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 		console.log(`📋 المجموعات النشطة للحساب [${sessionId}]:`)
 		for (const jid in groups) {
-			const subject = groups[jid].subject || ''
-			names.set(jid, subject)
-			console.log(`   - الاسم: "${subject}" | المعرّف (JID): ${jid}`)
+			console.log(`   - الاسم: "${groups[jid].subject}" | المعرّف (JID): ${jid}`)
 		}
 		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-		sessionGroupNames.set(sessionId, names)
 
 		// 2. التحقق من التعيين المباشر عبر معرفات JIDs الفريدة
 		if (config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us')) {
@@ -262,93 +255,71 @@ async function lookupGroupJids(sock: any, sessionId: string) {
  */
 async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: string, links: { link: string; code: string }[]) {
 	const senderSessionId = (config as any).SENDER_SESSION || sessionId
-	// نأخذ مجموعة العمل من جلسة الإرسال، مع احتياط من أي جلسة نجحت في اكتشافها
-	const linksGroupJid =
-		sessionLinksGroupJids.get(senderSessionId) ||
-		sessionLinksGroupJids.get(sessionId) ||
-		[...sessionLinksGroupJids.values()][0]
-
-	if (!linksGroupJid) {
-		logger.warn(`⚠️ [${sessionId}] تم رصد رابط لكن مجموعة العمل غير معيّنة بعد (sender=${senderSessionId})`)
-		return
-	}
+	const linksGroupJid = sessionLinksGroupJids.get(senderSessionId)
+	if (!linksGroupJid) return
 
 	const queue = sessionLinksQueues.get(sessionId)
-	if (!queue) {
-		logger.warn(`⚠️ [${sessionId}] طابور الروابط غير جاهز`)
-		return
-	}
+	if (!queue) return
 
 	queue.add(async () => {
-		try {
-			const cleanLinks: string[] = []
+		const cleanLinks: string[] = []
 
-			for (const linkObj of links) {
-				const linkTextToCheck = `${linkObj.link} ${text}`
-				if (!isSpamLinkText(linkTextToCheck)) {
-					cleanLinks.push(linkObj.link)
-				} else {
-					logger.info(`🚫 [${sessionId}] رابط مستبعد بفلتر السبام: ${linkObj.link}`)
-				}
+		for (const linkObj of links) {
+			const linkTextToCheck = `${linkObj.link} ${text}`
+			if (!isSpamLinkText(linkTextToCheck)) {
+				cleanLinks.push(linkObj.link)
+			}
+		}
+
+		if (cleanLinks.length === 0) return
+
+		// اسم المجموعة التي وُجد فيها الرابط
+		let sourceName = 'مصدر غير معروف'
+		const remoteJid = msg.key.remoteJid || ''
+		if (remoteJid.endsWith('@g.us')) {
+			try {
+				const meta = await sock.groupMetadata(remoteJid)
+				sourceName = meta.subject || 'مجموعة واتساب'
+			} catch {
+				sourceName = 'مجموعة واتساب'
+			}
+		} else if (remoteJid) {
+			sourceName = 'محادثة خاصة'
+		}
+
+		const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
+		const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
+		const senderSock = activeSockets.get(senderSessionId) || sock
+
+		for (const link of cleanLinks) {
+			// منع إرسال نفس الرابط المكرر على الإطلاق
+			if (await db.hasLinkBeenSent(link)) {
+				continue
 			}
 
-			if (cleanLinks.length === 0) {
-				logger.info(`🚫 [${sessionId}] لا روابط نظيفة بعد الفلترة من أصل ${links.length}`)
-				return
-			}
+			const linkNumber = await db.nextLinkNumber()
 
-			// اسم المصدر من الكاش المحلي فقط — بدون groupMetadata حتى لا يتجمّد طابور الإرسال
-			const remoteJid = msg.key.remoteJid || ''
-			const cachedNames =
-				sessionGroupNames.get(sessionId) ||
-				sessionGroupNames.get(senderSessionId)
-			let sourceName = 'مصدر غير معروف'
-			if (remoteJid.endsWith('@g.us')) {
-				sourceName = cachedNames?.get(remoteJid) || 'مجموعة واتساب'
-			} else if (remoteJid) {
-				sourceName = 'محادثة خاصة'
-			}
+			await db.insertLead({
+				studentPhone: linkPhone,
+				studentName: msg.pushName || 'غير مسجل',
+				originalGroup: sourceName,
+				messageContent: link,
+				classification: 'DISCUSSION',
+				subject: 'رابط مجموعة',
+				score: 50,
+				confidence: 0.8
+			})
 
-			const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
-			const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
-			const senderSock = activeSockets.get(senderSessionId) || sock
-
-			if (!activeSockets.get(senderSessionId)) {
-				logger.warn(`⚠️ [${sessionId}] جلسة الإرسال [${senderSessionId}] غير متصلة — سيتم الإرسال عبر الجلسة الحالية إن أمكن`)
-			}
-
-			for (const link of cleanLinks) {
-				if (await db.hasLinkBeenSent(link)) {
-					logger.info(`⏭️ [${sessionId}] رابط مكرر تم تجاهله: ${link}`)
-					continue
-				}
-
-				const linkNumber = await db.nextLinkNumber()
-
-				await db.insertLead({
-					studentPhone: linkPhone,
-					studentName: msg.pushName || 'غير مسجل',
-					originalGroup: sourceName,
-					messageContent: link,
-					classification: 'DISCUSSION',
-					subject: 'رابط مجموعة',
-					score: 50,
-					confidence: 0.8
-				})
-
-				const alertMessage = `🔗 *رابط واتساب جديد #${linkNumber}*
+			const alertMessage = `🔗 *رابط واتساب جديد #${linkNumber}*
 *المصدر:* ${sourceName}
 ${link}`
 
-				try {
-					await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
-					logger.info(`✅ [${sessionId}] تم توجيه الرابط #${linkNumber} بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
-				} catch (err) {
-					logger.error(`❌ [${sessionId}] فشل توجيه الرابط #${linkNumber} لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
-				}
+			try {
+				await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
+				logger.info(`✅ [${sessionId}] تم توجيه الرابط #${linkNumber} بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
+			} catch (err) {
+				logger.error(`❌ [${sessionId}] فشل توجيه الرابط #${linkNumber} لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
 			}
-		} catch (err) {
-			logger.error(`❌ [${sessionId}] خطأ غير متوقع في معالجة الروابط: ${err}`)
 		}
 	})
 }
