@@ -32,6 +32,7 @@ const logger = P({
 // خرائط تخزين معرفات المجموعات لتجنب التكرار (Session ID -> JID)
 const sessionLinksGroupJids = new Map<string, string>()
 const sessionLeadsGroupJids = new Map<string, string>()
+const groupNamesMap = new Map<string, string>()
 
 // خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
 export const activeSockets = new Map<string, any>()
@@ -108,6 +109,13 @@ export async function startWhatsAppSession(sessionId: string) {
 			if (msg.key.fromMe) continue
 			if (msg.key.remoteJid && isJidNewsletter(msg.key.remoteJid)) continue
 
+			// تجنب معالجة أي رسائل مرسلة داخل مجموعات التوجيه والعمل الخاصة بالبوت نفسه لتفادي حلقات التغذية الراجعة
+			const isTargetGroup = [...sessionLinksGroupJids.values()].includes(msg.key.remoteJid || '') ||
+			                      [...sessionLeadsGroupJids.values()].includes(msg.key.remoteJid || '')
+			if (isTargetGroup) {
+				continue
+			}
+
 			// تجنب الرسائل القديمة أو التاريخية المرسلة قبل تشغيل البوت لمنع التكرار عند إعادة التشغيل
 			const msgTime = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now()
 			if (msgTime < botStartupTime - 15000) {
@@ -145,18 +153,28 @@ export async function startWhatsAppSession(sessionId: string) {
 							 ''
 			}
 
-			// 2. معالجة الروابط المجمعة (Links Forwarding)
+			// 2. معالجة الروابط الرسمية وتوجيهها لمجموعة العمل (Links Catcher)
+			// القروبات: https://chat.whatsapp.com/... أو https://whatsapp.com/invite/...
+			// القنوات: https://whatsapp.com/channel/...
+			const officialWaLinkRegex =
+				/https:\/\/(?:chat\.whatsapp\.com\/(?:invite\/)?|whatsapp\.com\/invite\/|whatsapp\.com\/channel\/)([A-Za-z0-9_-]+)/gi
+			let foundOfficialLinks = false
 			if (text) {
-				const localLinksRegex = /https:\/\/chat\.whatsapp\.com\/(?:invite\/)?([a-zA-Z0-9]+)/gi
 				const links: { link: string; code: string }[] = []
 				let match
-				while ((match = localLinksRegex.exec(text)) !== null) {
-					links.push({ link: match[0], code: match[1] })
+				while ((match = officialWaLinkRegex.exec(text)) !== null) {
+					links.push({ link: match[0], code: match[1] || '' })
 				}
 
 				if (links.length > 0) {
+					foundOfficialLinks = true
 					handleGroupLinks(sock, sessionId, msg, text, links)
 				}
+			}
+
+			// إذا كانت الرسالة تحتوي على روابط رسمية (قروبات/قنوات)، نتخطى محرك طلبات الطلاب (SLIE) تماماً للفصل التام
+			if (foundOfficialLinks) {
+				continue
 			}
 
 			// 3. معالجة طلبات مساعدة الطلاب عبر الأنبوب المعياري (SLIE Engine Pipeline)
@@ -200,6 +218,7 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 		console.log(`📋 المجموعات النشطة للحساب [${sessionId}]:`)
 		for (const jid in groups) {
 			console.log(`   - الاسم: "${groups[jid].subject}" | المعرّف (JID): ${jid}`)
+			groupNamesMap.set(jid, groups[jid].subject)
 		}
 		console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 
@@ -255,8 +274,16 @@ async function lookupGroupJids(sock: any, sessionId: string) {
  */
 async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: string, links: { link: string; code: string }[]) {
 	const senderSessionId = (config as any).SENDER_SESSION || sessionId
-	const linksGroupJid = sessionLinksGroupJids.get(senderSessionId)
-	if (!linksGroupJid) return
+	// وجهة الإرسال: جلسة الإرسال أولاً، ثم أي جلسة اكتشفت مجموعة العمل
+	const linksGroupJid =
+		sessionLinksGroupJids.get(senderSessionId) ||
+		sessionLinksGroupJids.get(sessionId) ||
+		[...sessionLinksGroupJids.values()][0]
+
+	if (!linksGroupJid) {
+		logger.warn(`⚠️ [${sessionId}] رابط مرصود لكن مجموعة العمل غير معيّنة (sender=${senderSessionId})`)
+		return
+	}
 
 	const queue = sessionLinksQueues.get(sessionId)
 	if (!queue) return
@@ -268,42 +295,86 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 			const linkTextToCheck = `${linkObj.link} ${text}`
 			if (!isSpamLinkText(linkTextToCheck)) {
 				cleanLinks.push(linkObj.link)
+			} else {
+				logger.info(`🚫 [${sessionId}] رابط مستبعد بفلتر السبام: ${linkObj.link}`)
 			}
 		}
 
 		if (cleanLinks.length === 0) return
 
-		// منع إرسال نفس الرابط المكرر على الإطلاق (تجنب التكرار العالمي للرابط نفسه)
+		// منع التكرار — لكن فقط للروابط التي أُرسلت فعلاً من قبل
 		if (await db.hasLinkBeenSent(cleanLinks[0])) {
+			logger.info(`⏭️ [${sessionId}] رابط مكرر (مُرسل سابقاً) تم تجاهله: ${cleanLinks[0]}`)
 			return
 		}
 
 		const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
 		const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
 
-		// حفظ الرابط كفرصة لتجنب التكرار
-		await db.insertLead({
-			studentPhone: linkPhone,
-			studentName: msg.pushName || 'غير مسجل',
-			originalGroup: 'روابط مجموعات',
-			messageContent: cleanLinks[0],
-			classification: 'DISCUSSION',
-			subject: 'رابط مجموعة',
-			score: 50,
-			confidence: 0.8
-		})
+		// 1. حساب رقم التسلسل للرابط الجديد
+		const leads = await db.getLeads()
+		const linkCount = leads.filter(l => l.subject === 'رابط مجموعة').length
+		const nextNumber = linkCount + 1
 
-		const alertMessage = `🔗 *رابط مجموعة واتساب للعمل:*
+		// 2. تحديد اسم المجموعة المصدر
+		let groupName = 'غير معروف'
+		if (msg.key.remoteJid) {
+			if (msg.key.remoteJid.endsWith('@g.us')) {
+				groupName = groupNamesMap.get(msg.key.remoteJid) || 'غير معروف'
+				if (groupName === 'غير معروف') {
+					try {
+						const metadata = await sock.groupMetadata(msg.key.remoteJid)
+						groupName = metadata?.subject || 'غير معروف'
+						if (metadata?.subject) {
+							groupNamesMap.set(msg.key.remoteJid, metadata.subject)
+						}
+					} catch {
+						groupName = 'غير معروف'
+					}
+				}
+			} else {
+				groupName = 'خاص'
+			}
+		}
+
+		// 3. تنسيق الرسالة بنفس الشكل المطلوب في الصورة
+		const alertMessage = `🔗 *رابط واتساب جديد #${nextNumber}*
+*المصدر:* ${groupName}
 ${cleanLinks.join('\n')}`
 
-		// جلب مقبس الإرسال المخصص
 		const senderSock = activeSockets.get(senderSessionId) || sock
+		const usedSender = activeSockets.get(senderSessionId) ? senderSessionId : `${sessionId}(fallback)`
+
+		logger.info(`📤 [${sessionId}] محاولة إرسال رابط إلى JID=${linksGroupJid} عبر [${usedSender}]`)
 
 		try {
-			await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
-			logger.info(`✅ [${sessionId}] تم توجيه الرابط بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
+			// تعطيل معاينة الرابط: واتساب أحياناً يقبل الإرسال ثم يحجب ظهور روابط المجموعات مع الـ preview
+			const sent = await senderSock.sendMessage(
+				linksGroupJid,
+				{ text: alertMessage },
+				{ linkPreview: false }
+			)
+
+			if (!sent?.key?.id) {
+				logger.error(`❌ [${sessionId}] الإرسال رجع بدون معرف رسالة — الرسالة غالباً لم تصل. الوجهة: ${linksGroupJid}`)
+				return
+			}
+
+			// نحفظ في القاعدة فقط بعد نجاح الإرسال الحقيقي حتى لا نمنع إعادة المحاولة
+			await db.insertLead({
+				studentPhone: linkPhone,
+				studentName: msg.pushName || 'غير مسجل',
+				originalGroup: groupName,
+				messageContent: cleanLinks[0],
+				classification: 'DISCUSSION',
+				subject: 'رابط مجموعة',
+				score: 50,
+				confidence: 0.8
+			})
+
+			logger.info(`✅ [${sessionId}] وصل الإرسال: msgId=${sent.key.id} | الوجهة=${linksGroupJid} | عبر=${usedSender}`)
 		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل توجيه الرابط لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
+			logger.error(`❌ [${sessionId}] فشل إرسال الرابط إلى ${linksGroupJid} عبر [${usedSender}]: ${err}`)
 		}
 	})
 }
@@ -405,19 +476,18 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 			confidence: analysis.confidence
 		})
 
-		// 5. صياغة الرسالة التنبيهية التلقائية المبسطة
-		const alertMessage = `📝 *طلب مساعدة جديد (Lead)*
+		// 5. صياغة الرسالة التنبيهية التلقائية المبسطة المنسقة كما طلب المستخدم باستخدام الأيقونات فقط
+		const leads = await db.getLeads()
+		const leadCount = leads.filter(l => l.subject !== 'رابط مجموعة').length
+		const nextLeadNumber = leadCount + 1
 
-👥 *المجموعة المصدر:* ${savedLead.originalGroup}
-👤 *الطالب:* ${savedLead.studentName} ${isLid ? `(🔒 رقم مخفي)` : `(@${savedLead.studentPhone})`}
+		const alertMessage = `📝 *#${nextLeadNumber}*
 
-💬 *الرسالة الأصلية:*
-${sliemMsg.text}
-${sliemMsg.quotedText ? `\n↪️ *الرسالة المقتبسة (التي تم الرد عليها):* "${sliemMsg.quotedText}"` : ''}
+💬 ${sliemMsg.text}${sliemMsg.quotedText ? `\n*(الرد على):* "${sliemMsg.quotedText}"` : ''}
 
-${groupLink ? `👥 *رابط المجموعة المصدر:* ${groupLink}\n` : ''}${groupJid ? `🆔 *معرف المجموعة:* \`${groupJid}\`\n` : ''}
-🔗 *رابط التواصل المباشر مع الطالب:*
-${chatLink}`
+👤 ${chatLink}
+
+${groupLink ? `👥 ${groupLink}` : ''}`
 
 		const sleepTime = Math.floor(Math.random() * 3000) + 2000
 		await new Promise(resolve => setTimeout(resolve, sleepTime))

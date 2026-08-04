@@ -18,7 +18,7 @@ export const config = {
 	SESSIONS: ['account_1', 'account_2'],
 
 	// الجلسة المسؤولة عن توجيه الرسائل والإرسال للمجموعات
-	SENDER_SESSION: 'account_2',
+	SENDER_SESSION: 'account_1',
 }
 
 /**
