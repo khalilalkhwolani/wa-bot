@@ -16,7 +16,7 @@ export function evaluateLead(analysis: AIAnalysisResult): {
 	}
 
 	// 2. التحقق من درجة الثقة (Confidence) للـ AI
-	if (analysis.confidence < 0.40) {
+	if (analysis.confidence < 0.55) {
 		return {
 			shouldNotify: false,
 			reason: `ثقة تصنيف الذكاء الاصطناعي منخفضة جداً (${analysis.confidence})`
@@ -24,8 +24,7 @@ export function evaluateLead(analysis: AIAnalysisResult): {
 	}
 
 	// 3. التحقق من النقاط (Score Threshold)
-	// سنحدد حد أدنى 45 نقطة لضمان جودة الفرص المستلمة وتجنب النقاشات التافهة
-	const MIN_SCORE = 45
+	const MIN_SCORE = 30
 	if (analysis.leadScore < MIN_SCORE) {
 		return {
 			shouldNotify: false,

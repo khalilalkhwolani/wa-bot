@@ -273,37 +273,53 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 
 		if (cleanLinks.length === 0) return
 
-		// منع إرسال نفس الرابط المكرر على الإطلاق (تجنب التكرار العالمي للرابط نفسه)
-		if (await db.hasLinkBeenSent(cleanLinks[0])) {
-			return
+		// اسم المجموعة التي وُجد فيها الرابط
+		let sourceName = 'مصدر غير معروف'
+		const remoteJid = msg.key.remoteJid || ''
+		if (remoteJid.endsWith('@g.us')) {
+			try {
+				const meta = await sock.groupMetadata(remoteJid)
+				sourceName = meta.subject || 'مجموعة واتساب'
+			} catch {
+				sourceName = 'مجموعة واتساب'
+			}
+		} else if (remoteJid) {
+			sourceName = 'محادثة خاصة'
 		}
 
 		const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
 		const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
-
-		// حفظ الرابط كفرصة لتجنب التكرار
-		await db.insertLead({
-			studentPhone: linkPhone,
-			studentName: msg.pushName || 'غير مسجل',
-			originalGroup: 'روابط مجموعات',
-			messageContent: cleanLinks[0],
-			classification: 'DISCUSSION',
-			subject: 'رابط مجموعة',
-			score: 50,
-			confidence: 0.8
-		})
-
-		const alertMessage = `🔗 *رابط مجموعة واتساب للعمل:*
-${cleanLinks.join('\n')}`
-
-		// جلب مقبس الإرسال المخصص
 		const senderSock = activeSockets.get(senderSessionId) || sock
 
-		try {
-			await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
-			logger.info(`✅ [${sessionId}] تم توجيه الرابط بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
-		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل توجيه الرابط لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
+		for (const link of cleanLinks) {
+			// منع إرسال نفس الرابط المكرر على الإطلاق
+			if (await db.hasLinkBeenSent(link)) {
+				continue
+			}
+
+			const linkNumber = await db.nextLinkNumber()
+
+			await db.insertLead({
+				studentPhone: linkPhone,
+				studentName: msg.pushName || 'غير مسجل',
+				originalGroup: sourceName,
+				messageContent: link,
+				classification: 'DISCUSSION',
+				subject: 'رابط مجموعة',
+				score: 50,
+				confidence: 0.8
+			})
+
+			const alertMessage = `🔗 *رابط واتساب جديد #${linkNumber}*
+*المصدر:* ${sourceName}
+${link}`
+
+			try {
+				await senderSock.sendMessage(linksGroupJid, { text: alertMessage })
+				logger.info(`✅ [${sessionId}] تم توجيه الرابط #${linkNumber} بنجاح لمجموعة العمل عبر [${senderSessionId}].`)
+			} catch (err) {
+				logger.error(`❌ [${sessionId}] فشل توجيه الرابط #${linkNumber} لمجموعة العمل عبر [${senderSessionId}]: ${err}`)
+			}
 		}
 	})
 }

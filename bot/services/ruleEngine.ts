@@ -16,14 +16,19 @@ const HELP_VERBS = [
 	'يقدر', 'تقدر', 'يفزع', 'تفزع', 'يدرس', 'تدرس'
 ].map(normalizeArabicSearch)
 
-// تعبيرات طلب المساعدة ولهجات الفزعة (اليمنية والخليجية والعامة)
+// تعبيرات طلب مساعدة قوية فقط (بدون ابي/ابغى/اشتي لأنها كلمات يومية عادية)
 const HELP_EXPRESSIONS = [
-	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده', 'مساعده',
-	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي', 'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
+	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده',
+	'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
 	'ضايع', 'مش فاهم', 'مو فاهم', 'ما عرفت', 'ما فهمت', 'صعب علي', 'مين يعرف', 'أحد يعرف', 'احد يعرف',
 	'مين يقدر', 'أحد يقدر', 'احد يقدر', 'مين يحل', 'أحد يحل', 'احد يحل', 'مين يمسك', 'أحد يمسك', 'احد يمسك',
-	'من يحل', 'من يمسك', 'من يساعد', 'من يفهم', 'من يشرح', 'من يسوي', 'من يعرف', 'كيف احل', 'طريقة حل', 
+	'من يحل', 'من يمسك', 'من يساعد', 'من يفهم', 'من يشرح', 'من يسوي', 'من يعرف', 'كيف احل', 'طريقة حل',
 	'شرح طريقة', 'ابغا فزعه', 'ابي فزعه', 'شلو واجب', 'امسكوا واجب', 'يسعفني'
+].map(normalizeArabicSearch)
+
+// كلمات رغبة ضعيفة: لا تكفي وحدها — تحتاج سياق دراسي
+const WEAK_DESIRE_WORDS = [
+	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي'
 ].map(normalizeArabicSearch)
 
 // عبارات إعلانية ترويجية واضحة يتم حظرها محلياً فوراً
@@ -92,12 +97,17 @@ export function shouldAnalyzeStudentLead(text: string): boolean {
 		return false
 	}
 
-	// 7. التحقق من وجود تعبير طلب مساعدة مباشر، أو وجود (اسم دراسي + فعل طلب مساعدة)
+	// 7. تعبير قوي، أو (اسم دراسي + فعل مساعدة)، أو (رغبة ضعيفة + سياق دراسي)
 	const hasHelpExpression = HELP_EXPRESSIONS.some(keyword => normalizedText.includes(keyword))
 	const hasStudyNoun = STUDY_NOUNS.some(keyword => normalizedText.includes(keyword))
 	const hasHelpVerb = HELP_VERBS.some(keyword => normalizedText.includes(keyword))
+	const hasWeakDesire = WEAK_DESIRE_WORDS.some(keyword => normalizedText.includes(keyword))
 
-	return hasHelpExpression || (hasStudyNoun && hasHelpVerb)
+	return (
+		hasHelpExpression ||
+		(hasStudyNoun && hasHelpVerb) ||
+		(hasWeakDesire && (hasStudyNoun || hasHelpVerb))
+	)
 }
 
 /**
