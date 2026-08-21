@@ -131,7 +131,15 @@ export async function startWhatsAppSession(sessionId: string) {
 				logger.info(`🔄 جاري محاولة إعادة الاتصال خلال 5 ثوانٍ للحساب [${sessionId}]...`)
 				setTimeout(() => startWhatsAppSession(sessionId), 5000)
 			} else {
-				logger.error(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. يرجى إزالة المجلد ${authFolder} وإعادة التشغيل.`)
+				logger.warn(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. جاري تنظيف الجلسة القديمة وتوليد رمز QR جديد...`)
+				try {
+					if (fs.existsSync(authFolder)) {
+						fs.rmSync(authFolder, { recursive: true, force: true })
+					}
+				} catch (e) {
+					// تجاهل
+				}
+				setTimeout(() => startWhatsAppSession(sessionId), 3000)
 			}
 		} else if (connection === 'open') {
 			activeSockets.set(sessionId, sock)
