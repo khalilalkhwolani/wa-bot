@@ -33,11 +33,13 @@ export function calculateLocalConfidence(
 
 	// 5. اتخاذ القرار التوجيهي بناءً على النطاق
 	let routingDecision: 'REJECT' | 'PASS' | 'AI_GRAY' = 'AI_GRAY';
-	if (finalScore >= 85) {
-		routingDecision = 'PASS';
-	} else if (finalScore < 25) {
+	if (finalScore >= 80) {
+		routingDecision = 'PASS'; // تجاوز الـ AI وتوجيه فوري (طالب مؤكد)
+	} else if (finalScore < 1) {
+		// رفض فقط الحالات السلبية جداً (إعلانات مؤكدة أو مروجون)
 		routingDecision = 'REJECT';
 	}
+	// ملاحظة: كل ما بين 1 و 79 يذهب للـ AI_GRAY للحصم الذكي بدلاً من الرفض الصامت
 
 	return {
 		confidence: finalScore / 100,

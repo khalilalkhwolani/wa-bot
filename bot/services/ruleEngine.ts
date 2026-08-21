@@ -16,19 +16,14 @@ const HELP_VERBS = [
 	'يقدر', 'تقدر', 'يفزع', 'تفزع', 'يدرس', 'تدرس'
 ].map(normalizeArabicSearch)
 
-// تعبيرات طلب مساعدة قوية فقط (بدون ابي/ابغى/اشتي لأنها كلمات يومية)
+// تعبيرات طلب المساعدة ولهجات الفزعة (اليمنية والخليجية والعامة)
 const HELP_EXPRESSIONS = [
-	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده',
-	'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
+	'فزعه', 'فزعتكم', 'تكفون', 'تكفى', 'افزعوا', 'ساعدوني', 'تساعدني', 'مساعده', 'مساعده',
+	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي', 'محتاج', 'محتاجه', 'مبتلش', 'متوهق',
 	'ضايع', 'مش فاهم', 'مو فاهم', 'ما عرفت', 'ما فهمت', 'صعب علي', 'مين يعرف', 'أحد يعرف', 'احد يعرف',
 	'مين يقدر', 'أحد يقدر', 'احد يقدر', 'مين يحل', 'أحد يحل', 'احد يحل', 'مين يمسك', 'أحد يمسك', 'احد يمسك',
-	'من يحل', 'من يمسك', 'من يساعد', 'من يفهم', 'من يشرح', 'من يسوي', 'من يعرف', 'كيف احل', 'طريقة حل',
+	'من يحل', 'من يمسك', 'من يساعد', 'من يفهم', 'من يشرح', 'من يسوي', 'من يعرف', 'كيف احل', 'طريقة حل', 
 	'شرح طريقة', 'ابغا فزعه', 'ابي فزعه', 'شلو واجب', 'امسكوا واجب', 'يسعفني'
-].map(normalizeArabicSearch)
-
-// كلمات رغبة ضعيفة: لا تكفي وحدها — تحتاج سياق دراسي
-const WEAK_DESIRE_WORDS = [
-	'ابي', 'ابغا', 'ابغى', 'أشتي', 'اشتي', 'يشتي'
 ].map(normalizeArabicSearch)
 
 // عبارات إعلانية ترويجية واضحة يتم حظرها محلياً فوراً
@@ -49,73 +44,60 @@ const BLACKLIST_KEYWORDS = [
 	'جواز', 'جوازات', 'جوازين', 'نقل معلومات', 'انجاز'
 ].map(normalizeArabicSearch)
 
-function stripBotMarkers(text: string): string {
-	return (text || '')
-		.replace(/▫️\s*/g, '')
-		.replace(/↪️\s*/g, '')
-		.trim()
-}
-
 /**
- * طبقة أ: رفض هيكلي رخيص (رابط/إعلان/رسالة فارغة) بدون تحليل دلالي
+ * فلتر محلي سريع (Rule Engine) للتحقق من أن الرسالة مرشحة للتحليل بالذكاء الاصطناعي
  */
-export function passesStructuralLeadGate(text: string): boolean {
-	const cleaned = stripBotMarkers(text)
-	if (!cleaned || cleaned.length < 8) return false
+export function shouldAnalyzeStudentLead(text: string): boolean {
+	if (!text || text.length < 15) return false
 
+	// 1. تجنب الرسائل التي تحتوي على إيموجيات فقط
 	const emojiRegex = /^[\s\p{Emoji}\p{Extended_Pictographic}]+$/u
-	if (emojiRegex.test(cleaned)) return false
+	if (emojiRegex.test(text)) return false
 
-	if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) return false
+	// 2. تجنب الرسائل التي تحتوي على روابط فقط
+	if (text.trim().startsWith('http://') || text.trim().startsWith('https://')) return false
 
-	if (cleaned.includes('wa.me/') || cleaned.includes('wa.link/') || cleaned.includes('api.whatsapp.com/send')) {
+	const normalizedText = normalizeArabicSearch(text)
+
+	// 3. كشف وحظر روابط التواصل الواتساب المباشرة (غالباً ما يستخدمها المعلنون للترويج)
+	if (text.includes('wa.me/') || text.includes('wa.link/') || text.includes('api.whatsapp.com/send')) {
 		return false
 	}
 
-	const lines = cleaned.split('\n')
+	// 4. كشف وحظر القوائم النقطية أو الأسطر التي تبدأ برموز تعبيرية (إعلان الكتالوجات)
+	const lines = text.split('\n')
 	let symbolLines = 0
 	for (const line of lines) {
 		const trimmed = line.trim()
-		if (trimmed && /^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
-			symbolLines++
+		if (trimmed) {
+			// التحقق من بدء السطر برمز تعبيري أو مؤشر قائمة
+			if (/^[\p{Emoji}\p{Extended_Pictographic}♦️🔹🔸📌✅☑️✔️•\-*]/u.test(trimmed)) {
+				symbolLines++
+			}
 		}
 	}
-	if (symbolLines >= 3) return false
+	if (symbolLines >= 3) {
+		return false
+	}
 
-	const bulletPoints = (cleaned.match(/[♦️🔹🔸📌✅•\-*]/g) || []).length
-	if (bulletPoints >= 3) return false
+	// 5. كشف وحظر القوائم النقطية العامة
+	const bulletPoints = (text.match(/[♦️🔹🔸📌✅•\-*]/g) || []).length
+	if (bulletPoints >= 3) {
+		return false
+	}
 
-	const normalizedText = normalizeArabicSearch(cleaned)
-	if (AD_KEYWORDS.some(keyword => normalizedText.includes(keyword))) return false
+	// 6. كشف وحظر العبارات الإعلانية الشهيرة
+	const isAd = AD_KEYWORDS.some(keyword => normalizedText.includes(keyword))
+	if (isAd) {
+		return false
+	}
 
-	return true
-}
-
-/**
- * طبقة ب: إشارات أكاديمية كميزات وليست قراراً نهائياً
- */
-export function hasAcademicHelpSignal(text: string): boolean {
-	const cleaned = stripBotMarkers(text)
-	if (!cleaned) return false
-
-	const normalizedText = normalizeArabicSearch(cleaned)
+	// 7. التحقق من وجود تعبير طلب مساعدة مباشر، أو وجود (اسم دراسي + فعل طلب مساعدة)
 	const hasHelpExpression = HELP_EXPRESSIONS.some(keyword => normalizedText.includes(keyword))
 	const hasStudyNoun = STUDY_NOUNS.some(keyword => normalizedText.includes(keyword))
 	const hasHelpVerb = HELP_VERBS.some(keyword => normalizedText.includes(keyword))
-	const hasWeakDesire = WEAK_DESIRE_WORDS.some(keyword => normalizedText.includes(keyword))
 
-	return (
-		hasHelpExpression ||
-		(hasStudyNoun && hasHelpVerb) ||
-		(hasWeakDesire && (hasStudyNoun || hasHelpVerb))
-	)
-}
-
-/**
- * توافق خلفي: هيكل سليم + إشارة أكاديمية في النص نفسه
- */
-export function shouldAnalyzeStudentLead(text: string): boolean {
-	return passesStructuralLeadGate(text) && hasAcademicHelpSignal(text)
+	return hasHelpExpression || (hasStudyNoun && hasHelpVerb)
 }
 
 /**

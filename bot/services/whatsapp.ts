@@ -1,30 +1,23 @@
 import { Boom } from '@hapi/boom'
-import makeWASocket, {
-	DisconnectReason,
-	fetchLatestBaileysVersion,
-	isJidNewsletter,
-	makeCacheableSignalKeyStore,
-	useMultiFileAuthState
+import makeWASocket, { 
+	DisconnectReason, 
+	fetchLatestBaileysVersion, 
+	isJidNewsletter, 
+	makeCacheableSignalKeyStore, 
+	useMultiFileAuthState 
 } from '../../src'
 import P from 'pino'
-import fs from 'fs'
+import qrcode from 'qrcode-terminal'
+import path from 'path'
 import PQueue from 'p-queue'
-import {
-	config,
-	getAuthFolder,
-	getRoleLabel,
-	isReaderSession,
-	isSenderSession,
-	normalizeArabic
-} from '../config'
+import { config, normalizeArabic } from '../config'
 import { db } from '../database/database'
-import {
-	runSLIEPipeline,
-	contextBuilder,
-	processModeratorFeedback,
-	SLIEMessage
+import { 
+	runSLIEPipeline, 
+	contextBuilder, 
+	processModeratorFeedback, 
+	SLIEMessage 
 } from '../slie'
-import { persistSessionRemote, scheduleSessionPersist } from './sessionStore'
 
 // إعداد السجلات بنفس الهيئة النظيفة
 const logger = P({
@@ -43,26 +36,6 @@ const groupNamesMap = new Map<string, string>()
 // خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
 export const activeSockets = new Map<string, any>()
 
-// خريطة لتخزين رموز الـ QR الحية لعرضها على صفحة الويب (Session ID -> QR String)
-export const sessionQRs = new Map<string, string>()
-
-// سجل الأحداث الحية لمراقبة نشاط البوت في الوقت الفعلي
-export interface LiveEvent {
-	time: string
-	message: string
-	type: 'info' | 'success' | 'warn' | 'link'
-}
-
-export const liveEvents: LiveEvent[] = []
-
-export function addLiveEvent(message: string, type: 'info' | 'success' | 'warn' | 'link' = 'info') {
-	const time = new Date().toLocaleTimeString('ar-EG', { hour12: false })
-	liveEvents.unshift({ time, message, type })
-	if (liveEvents.length > 50) {
-		liveEvents.pop()
-	}
-}
-
 // وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
 const botStartupTime = Date.now()
 
@@ -70,32 +43,9 @@ const botStartupTime = Date.now()
 const sessionLinksQueues = new Map<string, PQueue>()
 const sessionLeadsQueues = new Map<string, PQueue>()
 
-/** محاولات إعادة الاتصال لكل جلسة (للـ backoff) */
-const reconnectAttempts = new Map<string, number>()
-/** منع جدولة أكثر من إعادة اتصال واحدة في الوقت نفسه */
-const reconnectScheduled = new Set<string>()
-/** منع تشغيل جلستين متزامنتين لنفس الحساب */
+/** منع تشغيل/إعادة اتصال مزدوج لنفس الحساب */
 const startingSessions = new Set<string>()
-
-function scheduleReconnect(sessionId: string, reason: string) {
-	if (reconnectScheduled.has(sessionId)) return
-	reconnectScheduled.add(sessionId)
-
-	const attempt = (reconnectAttempts.get(sessionId) || 0) + 1
-	reconnectAttempts.set(sessionId, attempt)
-	const delayMs = Math.min(Math.round(5000 * Math.pow(1.5, attempt - 1)), 60_000)
-
-	logger.info(`🔄 [${sessionId}] إعادة اتصال خلال ${Math.round(delayMs / 1000)}ث (محاولة ${attempt}) — ${reason}`)
-	addLiveEvent(`🔄 إعادة اتصال [${sessionId}] خلال ${Math.round(delayMs / 1000)}ث...`, 'info')
-
-	setTimeout(() => {
-		reconnectScheduled.delete(sessionId)
-		startWhatsAppSession(sessionId).catch(err => {
-			logger.error(`❌ فشل إعادة تشغيل الجلسة [${sessionId}]: ${err}`)
-			scheduleReconnect(sessionId, 'فشل التشغيل')
-		})
-	}, delayMs)
-}
+const reconnectScheduled = new Set<string>()
 
 /**
  * دالة لتشغيل وإدارة جلسة عمل واتساب
@@ -107,23 +57,20 @@ export async function startWhatsAppSession(sessionId: string) {
 	}
 	startingSessions.add(sessionId)
 
-	const role = getRoleLabel(sessionId)
-	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}] (${role})...`)
-	addLiveEvent(`🔌 جاري تهيئة الاتصال للحساب [${sessionId}] (${role})...`, 'info')
-
 	try {
+	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}]...`)
+
 	// إنشاء طوابير إرسال مستقلة
 	const linksQueue = new PQueue({ concurrency: 1 })
 	const leadsQueue = new PQueue({ concurrency: 1 })
 	sessionLinksQueues.set(sessionId, linksQueue)
 	sessionLeadsQueues.set(sessionId, leadsQueue)
 
-	const authFolder = getAuthFolder(sessionId)
-	fs.mkdirSync(authFolder, { recursive: true })
+	const authFolder = path.join('sessions', `auth_info_${sessionId}`)
 	const { state, saveCreds } = await useMultiFileAuthState(authFolder)
 	const { version } = await fetchLatestBaileysVersion()
 
-	// أغلق أي مقبس قديم لنفس الحساب قبل فتح اتصال جديد (يمنع تصادم المفاتيح)
+	// أغلق مقبس قديم قبل فتح جديد (يمنع تصادم الجلسة)
 	const oldSock = activeSockets.get(sessionId)
 	if (oldSock) {
 		try {
@@ -131,7 +78,7 @@ export async function startWhatsAppSession(sessionId: string) {
 			oldSock.end?.(undefined)
 			oldSock.ws?.close?.()
 		} catch {
-			// تجاهل أخطاء الإغلاق
+			// تجاهل
 		}
 		activeSockets.delete(sessionId)
 	}
@@ -148,39 +95,29 @@ export async function startWhatsAppSession(sessionId: string) {
 		syncFullHistory: false,
 		shouldSyncHistoryMessage: () => false,
 		markOnlineOnConnect: false,
-		connectTimeoutMs: 30_000,
+		connectTimeoutMs: 60_000,
 		keepAliveIntervalMs: 25_000,
-		defaultQueryTimeoutMs: 20_000,
+		defaultQueryTimeoutMs: 60_000,
 	})
 
-	// حفظ حالة المصادقة محليًا + نسخة سحابية مجانية (Upstash) لتبقى بعد Deploy
-	sock.ev.on('creds.update', async () => {
-		await saveCreds()
-		scheduleSessionPersist(sessionId)
-	})
+	// حفظ حالة المصادقة عند التحديث
+	sock.ev.on('creds.update', saveCreds)
 
 	// التعامل مع تحديثات الاتصال وإعادة الاتصال الذكية
 	sock.ev.on('connection.update', async (update) => {
 		const { connection, lastDisconnect, qr } = update
 
 		if (qr) {
-			sessionQRs.set(sessionId, qr)
-			logger.info(`📸 تم توليد رمز QR جديد للحساب [${sessionId}] — متاح بصورة نقية على الرابط المباشر`)
-			addLiveEvent(`📸 تم توليد رمز QR جديد للحساب [${sessionId}] - متاح للمسح على الرابط`, 'info')
+			logger.info(`📸 يرجى مسح رمز الـ QR التالي للاتصال بالحساب [${sessionId}]:`)
+			qrcode.generate(qr, { small: true })
 		}
 
 		if (connection === 'close') {
 			activeSockets.delete(sessionId)
 			const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-			const errMsg = lastDisconnect?.error?.message || String(lastDisconnect?.error || 'unknown')
-			const isLoggedOut = statusCode === DisconnectReason.loggedOut
-
+			const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 			logger.error(
-				`❌ انقطع الاتصال للحساب [${sessionId}]. statusCode=${statusCode ?? 'n/a'} السبب: ${errMsg}`
-			)
-			addLiveEvent(
-				`⚠️ انقطع [${sessionId}] (code=${statusCode ?? 'n/a'}): ${errMsg}`,
-				'warn'
+				`❌ انقطع الاتصال للحساب [${sessionId}]. statusCode=${statusCode ?? 'n/a'} السبب: ${lastDisconnect?.error}`
 			)
 
 			try {
@@ -191,50 +128,28 @@ export async function startWhatsAppSession(sessionId: string) {
 				// تجاهل
 			}
 
-			// المسح فقط عند logout حقيقي (401) حتى يظهر باركود جديد.
-			// أخطاء الشبكة/الإغلاق العابر لا تمس مجلد الجلسة أبدًا.
-			if (isLoggedOut) {
-				logger.warn(
-					`⚠️ [${sessionId}] loggedOut (${statusCode}) — مسح جلسة هذا الحساب فقط لتوليد ربط جديد`
-				)
-				addLiveEvent(
-					`⚠️ [${sessionId}] تم فك الربط من واتساب — جاري تجهيز باركود جديد`,
-					'warn'
-				)
-				try {
-					if (fs.existsSync(authFolder)) {
-						fs.rmSync(authFolder, { recursive: true, force: true })
-					}
-				} catch {
-					// تجاهل
-				}
-				reconnectAttempts.set(sessionId, 0)
+			if (shouldReconnect) {
+				if (reconnectScheduled.has(sessionId)) return
+				reconnectScheduled.add(sessionId)
+				logger.info(`🔄 جاري محاولة إعادة الاتصال خلال 8 ثوانٍ للحساب [${sessionId}]...`)
+				setTimeout(() => {
+					reconnectScheduled.delete(sessionId)
+					startWhatsAppSession(sessionId).catch(err => {
+						logger.error(`❌ فشل إعادة تشغيل [${sessionId}]: ${err}`)
+					})
+				}, 8000)
+			} else {
+				logger.error(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. يرجى إزالة المجلد ${authFolder} وإعادة التشغيل.`)
 			}
-
-			scheduleReconnect(sessionId, isLoggedOut ? 'loggedOut-إعادة-ربط' : `close-${statusCode ?? 'n/a'}`)
 		} else if (connection === 'open') {
-			reconnectAttempts.set(sessionId, 0)
 			reconnectScheduled.delete(sessionId)
-			sessionQRs.delete(sessionId)
 			activeSockets.set(sessionId, sock)
-			const userPhone = sock.user?.id ? sock.user.id.split(':')[0] : 'متصل'
-			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role}) - الرقم: ${userPhone}!`)
-			addLiveEvent(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role}) - الرقم: +${userPhone}`, 'success')
-			persistSessionRemote(sessionId).catch(() => {})
-			// لا نجمّد حدث الاتصال: جلب المجموعات في الخلفية بمهلة قصيرة
+			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]!`)
 			lookupGroupJids(sock, sessionId).catch(err => {
-				logger.warn(`⚠️ [${sessionId}] فشل جلب المجموعات في الخلفية: ${err}`)
+				logger.warn(`⚠️ [${sessionId}] تنبيه جلب المجموعات: ${err}`)
 			})
 		}
 	})
-
-	// القراءة فقط على حساب القارئ — حساب الإرسال لا يعالج رسائل المصدر أبداً
-	if (!isReaderSession(sessionId)) {
-		logger.info(`🔕 [${sessionId}] وضع إرسال فقط: لن تتم قراءة رسائل القروبات المصدر`)
-		return
-	}
-
-	logger.info(`👂 [${sessionId}] وضع قراءة فقط: مراقبة الرسائل وتوجيه الإرسال عبر [${config.SENDER_SESSION}]`)
 
 	// مراقبة الرسائل الواردة وتوجيهها للمحركات المناسبة
 	sock.ev.on('messages.upsert', async (upsert) => {
@@ -246,7 +161,7 @@ export async function startWhatsAppSession(sessionId: string) {
 
 			// تجنب معالجة أي رسائل مرسلة داخل مجموعات التوجيه والعمل الخاصة بالبوت نفسه لتفادي حلقات التغذية الراجعة
 			const isTargetGroup = [...sessionLinksGroupJids.values()].includes(msg.key.remoteJid || '') ||
-				[...sessionLeadsGroupJids.values()].includes(msg.key.remoteJid || '')
+			                      [...sessionLeadsGroupJids.values()].includes(msg.key.remoteJid || '')
 			if (isTargetGroup) {
 				continue
 			}
@@ -257,39 +172,40 @@ export async function startWhatsAppSession(sessionId: string) {
 				continue
 			}
 
-			// 1. تفاعلات المشرفين (فقط إذا مسار الطلاب مفعّل)
+			// 1. معالجة تفاعلات المشرفين بالرموز للتغذية الراجعة (Reaction Feedback)
 			if (msg.message?.reactionMessage) {
-				if (config.ENABLE_STUDENT_LEADS) {
-					const reaction = msg.message.reactionMessage
-					const targetKey = reaction.key
-					const emoji = reaction.text || ''
-					const leadsGroupJid = sessionLeadsGroupJids.get(config.SENDER_SESSION) || sessionLeadsGroupJids.get(sessionId)
-					if (leadsGroupJid && targetKey?.remoteJid === leadsGroupJid) {
-						await handleModeratorReaction(sock, sessionId, targetKey?.id || '', emoji)
-					}
+				const reaction = msg.message.reactionMessage
+				const targetKey = reaction.key
+				const emoji = reaction.text || ''
+				
+				const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
+				if (leadsGroupJid && targetKey?.remoteJid === leadsGroupJid) {
+					await handleModeratorReaction(sock, sessionId, targetKey?.id || '', emoji)
 				}
 				continue
 			}
 
 			// استخراج النص المباشر
-			const text = msg.message?.conversation ||
-				msg.message?.extendedTextMessage?.text ||
-				msg.message?.imageMessage?.caption ||
-				msg.message?.videoMessage?.caption ||
-				''
+			const text = msg.message?.conversation || 
+						 msg.message?.extendedTextMessage?.text || 
+						 msg.message?.imageMessage?.caption || 
+						 msg.message?.videoMessage?.caption || 
+						 ''
 
 			// استخراج النص المقتبس (Quoted message)
 			const quotedMsgObj = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
 			let quotedText = ''
 			if (quotedMsgObj) {
-				quotedText = quotedMsgObj.conversation ||
-					quotedMsgObj.extendedTextMessage?.text ||
-					quotedMsgObj.imageMessage?.caption ||
-					quotedMsgObj.videoMessage?.caption ||
-					''
+				quotedText = quotedMsgObj.conversation || 
+							 quotedMsgObj.extendedTextMessage?.text || 
+							 quotedMsgObj.imageMessage?.caption || 
+							 quotedMsgObj.videoMessage?.caption || 
+							 ''
 			}
 
 			// 2. معالجة الروابط الرسمية وتوجيهها لمجموعة العمل (Links Catcher)
+			// القروبات: https://chat.whatsapp.com/... أو https://whatsapp.com/invite/...
+			// القنوات: https://whatsapp.com/channel/...
 			const officialWaLinkRegex =
 				/https:\/\/(?:chat\.whatsapp\.com\/(?:invite\/)?|whatsapp\.com\/invite\/|whatsapp\.com\/channel\/)([A-Za-z0-9_-]+)/gi
 			let foundOfficialLinks = false
@@ -306,16 +222,17 @@ export async function startWhatsAppSession(sessionId: string) {
 				}
 			}
 
-			// مسار طلبات الطلاب متوقف حالياً — الروابط فقط
-			if (!config.ENABLE_STUDENT_LEADS) {
-				continue
-			}
-
+			// إذا كانت الرسالة تحتوي على روابط رسمية (قروبات/قنوات)، نتخطى محرك طلبات الطلاب (SLIE) تماماً للفصل التام
 			if (foundOfficialLinks) {
 				continue
 			}
 
-			// 3. معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE
+			// مسار طلبات الطلاب متوقف حالياً
+			if (!(config as any).ENABLE_STUDENT_LEADS) {
+				continue
+			}
+
+			// 3. معالجة طلبات مساعدة الطلاب عبر الأنبوب المعياري (SLIE Engine Pipeline)
 			if (text || quotedText) {
 				let participantJid = msg.key.participantAlt || msg.key.participant || ''
 				if (!participantJid && msg.key.remoteJid && !msg.key.remoteJid.endsWith('@g.us')) {
@@ -334,6 +251,7 @@ export async function startWhatsAppSession(sessionId: string) {
 					rawMessage: msg
 				}
 
+				// استخدام محرك تجميع السياق (Context Builder) المطور للرسائل المتتالية
 				contextBuilder.addMessage(sliemMsg, (combinedMsg) => {
 					handleStudentLeadMessage(sock, sessionId, combinedMsg)
 				})
@@ -349,14 +267,23 @@ export async function startWhatsAppSession(sessionId: string) {
  * البحث عن معرفات المجموعات المستهدفة عند الاتصال وتعيينها بدقة
  */
 async function lookupGroupJids(sock: any, sessionId: string) {
-	// 1. تعيين فوري ومباشر في حال تم تحديد المعرف الفريد JID في الإعدادات
+	// 1) تعيين فوري بالـ JID — هذا يكفي للتشغيل (لا حاجة لجلب كل القروبات)
 	if (config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us')) {
 		sessionLinksGroupJids.set(sessionId, config.TARGET_LINKS_GROUP)
-		logger.info(`🎯 [${sessionId}] تم تعيين مجموعة الروابط مباشرة بالمعرف الفريد (JID): ${config.TARGET_LINKS_GROUP}`)
+		logger.info(`🎯 تم تعيين مجموعة الروابط مباشرة بالمعرف الفريد (JID): ${config.TARGET_LINKS_GROUP}`)
 	}
 	if (config.TARGET_LEADS_GROUP && config.TARGET_LEADS_GROUP.endsWith('@g.us')) {
 		sessionLeadsGroupJids.set(sessionId, config.TARGET_LEADS_GROUP)
-		logger.info(`🎯 [${sessionId}] تم تعيين مجموعة الطلاب مباشرة بالمعرف الفريد (JID): ${config.TARGET_LEADS_GROUP}`)
+		logger.info(`🎯 تم تعيين مجموعة الطلاب مباشرة بالمعرف الفريد (JID): ${config.TARGET_LEADS_GROUP}`)
+	}
+
+	const linksIsJid = !!(config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us'))
+	const leadsIsJid = !!(config.TARGET_LEADS_GROUP && config.TARGET_LEADS_GROUP.endsWith('@g.us'))
+
+	// إذا الوجهات محددة بـ JID: نتوقف هنا — جلب كل القروبات بطيء وغير مطلوب
+	if (linksIsJid && leadsIsJid) {
+		logger.info(`⏭️ [${sessionId}] تخطي جلب قائمة القروبات — الوجهات محددة مسبقًا`)
+		return
 	}
 
 	try {
@@ -400,15 +327,11 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 			}
 		}
 
-		if (isSenderSession(sessionId)) {
-			if (!sessionLinksGroupJids.has(sessionId)) {
-				logger.warn(`⚠️ [مرسل] لم يتم تحديد مجموعة الروابط [${config.TARGET_LINKS_GROUP}] للحساب [${sessionId}] — تأكد أنه عضو فيها`)
-			}
-			if (config.ENABLE_STUDENT_LEADS && !sessionLeadsGroupJids.has(sessionId)) {
-				logger.warn(`⚠️ [مرسل] لم يتم تحديد مجموعة الطلاب [${config.TARGET_LEADS_GROUP}] للحساب [${sessionId}]`)
-			}
-		} else if (isReaderSession(sessionId)) {
-			logger.info(`ℹ️ [قارئ] حساب القراءة يوجه الإرسال تلقائياً عبر [${config.SENDER_SESSION}]`)
+		if (!sessionLinksGroupJids.has(sessionId)) {
+			logger.warn(`⚠️ لم يتم تحديد مجموعة الروابط المستهدفة [${config.TARGET_LINKS_GROUP}] للحساب [${sessionId}]`)
+		}
+		if (!sessionLeadsGroupJids.has(sessionId)) {
+			logger.warn(`⚠️ لم يتم تحديد مجموعة الطلاب المستهدفة [${config.TARGET_LEADS_GROUP}] للحساب [${sessionId}]`)
 		}
 	} catch (err) {
 		logger.warn(`⚠️ [${sessionId}] تنبيه جلب المجموعات: ${err}`)
@@ -419,9 +342,9 @@ async function lookupGroupJids(sock: any, sessionId: string) {
  * معالجة وتصفية وتوجيه روابط المجموعات
  */
 async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: string, links: { link: string; code: string }[]) {
-	const senderSessionId = config.SENDER_SESSION || sessionId
+	const senderSessionId = (config as any).SENDER_SESSION || sessionId
 	const directLinksJid = config.TARGET_LINKS_GROUP?.endsWith('@g.us') ? config.TARGET_LINKS_GROUP : undefined
-	// وجهة الإرسال: المعرف المباشر من الإعدادات، أو جلسة الإرسال، أو أي جلسة نشطة
+	// وجهة الإرسال: JID مباشر أولاً، ثم جلسة الإرسال، ثم أي جلسة أخرى
 	const linksGroupJid =
 		directLinksJid ||
 		sessionLinksGroupJids.get(senderSessionId) ||
@@ -480,7 +403,15 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 *المصدر:* ${groupName}
 ${cleanLinks.join('\n')}`
 
-		const senderSock = activeSockets.get(senderSessionId) || sock
+		// انتظر المرسل إن كان يعيد الاتصال (يمنع خطأ attrs عند انقطاع 408)
+		let senderSock = activeSockets.get(senderSessionId)
+		if (!senderSock && senderSessionId !== sessionId) {
+			for (let i = 0; i < 6 && !senderSock; i++) {
+				await new Promise(r => setTimeout(r, 2000))
+				senderSock = activeSockets.get(senderSessionId)
+			}
+		}
+		senderSock = senderSock || sock
 		const usedSender = activeSockets.get(senderSessionId) ? senderSessionId : `${sessionId}(fallback)`
 
 		logger.info(`📤 [${sessionId}] محاولة إرسال رابط إلى JID=${linksGroupJid} عبر [${usedSender}]`)
@@ -511,10 +442,8 @@ ${cleanLinks.join('\n')}`
 			})
 
 			logger.info(`✅ [${sessionId}] وصل الإرسال: msgId=${sent.key.id} | الوجهة=${linksGroupJid} | عبر=${usedSender}`)
-			addLiveEvent(`🚀 [${usedSender}] تم توجيه رابط #${nextNumber} بنجاح من [${groupName}] إلى مجموعة العمل`, 'success')
 		} catch (err) {
 			logger.error(`❌ [${sessionId}] فشل إرسال الرابط إلى ${linksGroupJid} عبر [${usedSender}]: ${err}`)
-			addLiveEvent(`❌ فشل إرسال الرابط #${nextNumber}: ${err}`, 'warn')
 		}
 	})
 }
@@ -523,9 +452,8 @@ ${cleanLinks.join('\n')}`
  * معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE المعياري
  */
 async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: SLIEMessage) {
-	const senderSessionId = config.SENDER_SESSION || sessionId
-	const directLeadsJid = config.TARGET_LEADS_GROUP?.endsWith('@g.us') ? config.TARGET_LEADS_GROUP : undefined
-	const leadsGroupJid = directLeadsJid || sessionLeadsGroupJids.get(senderSessionId) || sessionLeadsGroupJids.get(sessionId)
+	const senderSessionId = (config as any).SENDER_SESSION || sessionId
+	const leadsGroupJid = sessionLeadsGroupJids.get(senderSessionId)
 	if (!leadsGroupJid) return
 
 	const queue = sessionLeadsQueues.get(sessionId)
@@ -542,7 +470,7 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 
 	queue.add(async () => {
 		logger.info(`🤖 [${sessionId}] جاري تمرير الرسالة عبر أنبوب SLIE المعياري...`)
-
+		
 		// 2. تشغيل الأنبوب المعياري بالكامل لـ SLIE (Engines 1-9)
 		const pipelineResult = await runSLIEPipeline(sliemMsg)
 
@@ -673,13 +601,13 @@ async function handleModeratorReaction(sock: any, sessionId: string, sentMessage
 		// إرسال رد تأكيدي بسيط تحت التنبيه لتأكيد التعلم
 		const leadsGroupJid = sessionLeadsGroupJids.get(sessionId)
 		if (leadsGroupJid) {
-			const replyText = isTrueHelp
-				? `✅ تم تأكيد الفرصة كـ طالب حقيقي! رفع مستوى ثقة سلوك هذا المستخدم في النظام.`
+			const replyText = isTrueHelp 
+				? `✅ تم تأكيد الفرصة كـ طالب حقيقي! رفع مستوى ثقة سلوك هذا المستخدم في النظام.` 
 				: `❌ تم تصنيف الرسالة كـ إعلان كاذب! خصم معامل ثقة المرسل وتحديث فلاتر القواعد تلقائياً.`
 
-			await sock.sendMessage(leadsGroupJid, {
-				text: replyText
-			}, {
+			await sock.sendMessage(leadsGroupJid, { 
+				text: replyText 
+			}, { 
 				quoted: {
 					key: {
 						remoteJid: leadsGroupJid,

@@ -183,13 +183,13 @@ export async function analyzeMessageWithAI(text: string, quotedContext?: string)
 
 				// 4. الرجوع للتصفية المحلية الاحتياطية
 				return {
-					classification: 'DISCUSSION',
-					confidence: 0.20,
+					classification: 'HELP_REQUEST',
+					confidence: 0.50,
 					subject: 'خطأ اتصال بالذكاء الاصطناعي',
 					category: 'غير محدد',
-					urgency: 'Low',
-					leadScore: 0,
-					reason: 'فشل الاتصال بكل خدمات الذكاء الاصطناعي، تم الرفض احتياطياً'
+					urgency: 'Medium',
+					leadScore: 50,
+					reason: 'فشل الاتصال بكل خدمات الذكاء الاصطناعي، تم التمرير احتياطياً'
 				}
 			}
 		}
