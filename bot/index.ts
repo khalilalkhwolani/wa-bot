@@ -13,7 +13,7 @@ async function main() {
 	console.log('🤖 جاري تشغيل محرك التقاط وتصنيف طلبات الطلاب والروابط الموحد...');
 	console.log(`📁 مجلد الجلسات المحلي: ${path.resolve(SESSIONS_DIR)}`)
 
-	// 1. إنشاء مجلد الجلسات واسترجاعها من Upstash (مجاني) أو من Environment
+	// 1. استرجاع الجلسات من حزم Git (sessions-backup) ثم اختياريًا Upstash/Env
 	if (!fs.existsSync(SESSIONS_DIR)) {
 		fs.mkdirSync(SESSIONS_DIR, { recursive: true })
 	}

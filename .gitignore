@@ -19,4 +19,10 @@ test.ts
 TestData
 wa-logs*
 coverage
-# sessions/ متعمّد غير متجاهل: المستودع Private ورفع الجلسات مع النشر على Render المجاني
+
+# آلاف ملفات الجلسة الخام — لا تُرفع
+sessions/
+
+# حزمة واحدة لكل حساب تُرفع مع المستودع Private
+!sessions-backup/
+!sessions-backup/*.json

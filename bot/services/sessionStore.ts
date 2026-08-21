@@ -1,8 +1,11 @@
 import fs from 'fs'
 import path from 'path'
-import { getAuthFolder } from '../config'
+import { getAuthFolder, SESSIONS_DIR } from '../config'
 
 type SessionFiles = Record<string, string>
+
+/** ملفات الحزم المرفوعة مع Git (ملف واحد لكل حساب بدل آلاف الملفات) */
+export const SESSION_PACKS_DIR = process.env.SESSION_PACKS_DIR || 'sessions-backup'
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -12,6 +15,10 @@ function redisConfigured(): boolean {
 
 function redisKey(sessionId: string): string {
 	return `wa_session_${sessionId}`
+}
+
+function packPath(sessionId: string): string {
+	return path.join(SESSION_PACKS_DIR, `${sessionId}.json`)
 }
 
 /**
@@ -37,7 +44,6 @@ export function unpackSessionFolder(sessionId: string, files: SessionFiles): voi
 	const dir = getAuthFolder(sessionId)
 	fs.mkdirSync(dir, { recursive: true })
 	for (const [filename, content] of Object.entries(files)) {
-		// أمان بسيط: لا مسارات فرعية
 		if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) continue
 		fs.writeFileSync(path.join(dir, filename), content, 'utf8')
 	}
@@ -46,6 +52,41 @@ export function unpackSessionFolder(sessionId: string, files: SessionFiles): voi
 function folderIsEmpty(sessionId: string): boolean {
 	const dir = getAuthFolder(sessionId)
 	return !fs.existsSync(dir) || fs.readdirSync(dir).length === 0
+}
+
+/**
+ * حفظ حزمة الجلسة كملف واحد صالح للرفع مع Git (Private)
+ */
+export function persistSessionPack(sessionId: string): boolean {
+	const files = packSessionFolder(sessionId)
+	if (!files) return false
+
+	fs.mkdirSync(SESSION_PACKS_DIR, { recursive: true })
+	const target = packPath(sessionId)
+	fs.writeFileSync(target, JSON.stringify(files), 'utf8')
+	const sizeKb = Math.round(Buffer.byteLength(JSON.stringify(files), 'utf8') / 1024)
+	console.log(`📦 حُفظت حزمة الجلسة [${sessionId}] → ${target} (~${sizeKb}KB)`)
+	return true
+}
+
+/**
+ * استرجاع من ملف الحزمة المحلي (sessions-backup)
+ */
+export function restoreSessionFromPack(sessionId: string): boolean {
+	if (!folderIsEmpty(sessionId)) return false
+
+	const target = packPath(sessionId)
+	if (!fs.existsSync(target)) return false
+
+	try {
+		const files = JSON.parse(fs.readFileSync(target, 'utf8')) as SessionFiles
+		unpackSessionFolder(sessionId, files)
+		console.log(`📦 تم استرجاع جلسة [${sessionId}] من ${target}`)
+		return true
+	} catch (err) {
+		console.error(`⚠️ فشل فك حزمة [${sessionId}]:`, err)
+		return false
+	}
 }
 
 async function redisCommand(command: unknown[]): Promise<unknown> {
@@ -67,24 +108,21 @@ async function redisCommand(command: unknown[]): Promise<unknown> {
 	return data.result
 }
 
-/**
- * حفظ جلسة في Upstash (مجاني) — يتجاوز حدود Environment على Render
- */
 export async function persistSessionRemote(sessionId: string): Promise<boolean> {
-	if (!redisConfigured()) return false
+	// دائمًا: حزمة محلية للـ Git
+	persistSessionPack(sessionId)
+
+	if (!redisConfigured()) return true
 
 	const files = packSessionFolder(sessionId)
 	if (!files) return false
 
 	const payload = Buffer.from(JSON.stringify(files), 'utf8').toString('base64')
 	await redisCommand(['SET', redisKey(sessionId), payload])
-	console.log(`☁️ تم حفظ جلسة [${sessionId}] في التخزين السحابي المجاني (Upstash)`)
+	console.log(`☁️ تم حفظ جلسة [${sessionId}] أيضًا في Upstash`)
 	return true
 }
 
-/**
- * استرجاع جلسة من Upstash إن وُجدت
- */
 export async function restoreSessionFromRemote(sessionId: string): Promise<boolean> {
 	if (!redisConfigured()) return false
 	if (!folderIsEmpty(sessionId)) return false
@@ -99,9 +137,6 @@ export async function restoreSessionFromRemote(sessionId: string): Promise<boole
 	return true
 }
 
-/**
- * استرجاع من متغير بيئة SESSION_ACCOUNT_X (احتياطي للحزم الصغيرة)
- */
 export function restoreSessionFromEnv(sessionId: string): boolean {
 	if (!folderIsEmpty(sessionId)) return false
 
@@ -122,19 +157,22 @@ export function restoreSessionFromEnv(sessionId: string): boolean {
 }
 
 /**
- * استرجاع كل الحسابات: Upstash أولاً ثم Environment
+ * ترتيب الاسترجاع: مجلد محلي → حزمة Git → Upstash → Environment
  */
 export async function restoreAllSessions(sessionIds: string[]): Promise<void> {
-	if (redisConfigured()) {
-		console.log('☁️ تخزين الجلسات السحابي (Upstash) مفعّل — لا حاجة لـ Persistent Disk')
-	} else {
-		console.log(
-			'ℹ️ لم يُضبط Upstash بعد. على Render المجاني الجلسات تُفقد عند كل Deploy ما لم تضبط UPSTASH_REDIS_REST_URL و UPSTASH_REDIS_REST_TOKEN (مجاني).'
-		)
+	if (!fs.existsSync(SESSIONS_DIR)) {
+		fs.mkdirSync(SESSIONS_DIR, { recursive: true })
 	}
+
+	console.log(`📦 حزم الجلسات للـ Git: ${path.resolve(SESSION_PACKS_DIR)} (ملف واحد لكل حساب)`)
 
 	for (const sessionId of sessionIds) {
 		try {
+			if (!folderIsEmpty(sessionId)) {
+				console.log(`✅ [${sessionId}] جلسة محلية موجودة — لا حاجة للاسترجاع`)
+				continue
+			}
+			if (restoreSessionFromPack(sessionId)) continue
 			const fromCloud = await restoreSessionFromRemote(sessionId)
 			if (!fromCloud) restoreSessionFromEnv(sessionId)
 		} catch (err) {
@@ -145,11 +183,9 @@ export async function restoreAllSessions(sessionIds: string[]): Promise<void> {
 }
 
 /**
- * حفظ مؤجّل بعد تحديث المفاتيح (يمنع ضغط Upstash عند توالي التحديثات)
+ * حفظ مؤجّل بعد تحديث المفاتيح
  */
 export function scheduleSessionPersist(sessionId: string): void {
-	if (!redisConfigured()) return
-
 	const prev = saveTimers.get(sessionId)
 	if (prev) clearTimeout(prev)
 
@@ -157,8 +193,18 @@ export function scheduleSessionPersist(sessionId: string): void {
 		sessionId,
 		setTimeout(() => {
 			persistSessionRemote(sessionId).catch(err => {
-				console.error(`⚠️ فشل حفظ جلسة [${sessionId}] سحابيًا:`, err)
+				console.error(`⚠️ فشل حفظ جلسة [${sessionId}]:`, err)
 			})
 		}, 2500)
 	)
+}
+
+/**
+ * حزم كل الحسابات الموجودة محليًا الآن (للرفع مع Git)
+ */
+export function packAllLocalSessions(sessionIds: string[]): void {
+	for (const id of sessionIds) {
+		if (!folderIsEmpty(id)) persistSessionPack(id)
+		else console.log(`⏭️ تخطي [${id}] — لا توجد جلسة محلية`)
+	}
 }
