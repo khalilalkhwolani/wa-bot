@@ -37,6 +37,9 @@ const groupNamesMap = new Map<string, string>()
 // خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
 export const activeSockets = new Map<string, any>()
 
+// خريطة لتخزين رموز الـ QR الحية لعرضها على صفحة الويب (Session ID -> QR String)
+export const sessionQRs = new Map<string, string>()
+
 // وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
 const botStartupTime = Date.now()
 
@@ -130,8 +133,8 @@ export async function startWhatsAppSession(sessionId: string) {
 		const { connection, lastDisconnect, qr } = update
 
 		if (qr) {
-			logger.info(`📸 يرجى مسح رمز الـ QR التالي للاتصال بالحساب [${sessionId}]:`)
-			qrcode.generate(qr, { small: true })
+			sessionQRs.set(sessionId, qr)
+			logger.info(`📸 تم توليد رمز QR جديد للحساب [${sessionId}] — متاح بصورة نقية على الرابط المباشر`)
 		}
 
 		if (connection === 'close') {
@@ -162,6 +165,7 @@ export async function startWhatsAppSession(sessionId: string) {
 				setTimeout(() => startWhatsAppSession(sessionId), 3000)
 			}
 		} else if (connection === 'open') {
+			sessionQRs.delete(sessionId)
 			activeSockets.set(sessionId, sock)
 			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role})!`)
 			// لا نجمّد حدث الاتصال: جلب المجموعات في الخلفية بمهلة قصيرة
