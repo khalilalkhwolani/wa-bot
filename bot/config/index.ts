@@ -1,9 +1,9 @@
 export const config = {
-	// اسم المجموعة المستهدفة لتوجيه روابط مجموعات واتساب
-	TARGET_LINKS_GROUP: 'العمل',
+	// معرف مجموعة "العمل" لتوجيه روابط مجموعات واتساب
+	TARGET_LINKS_GROUP: process.env.TARGET_LINKS_GROUP || '120363406079474111@g.us',
 
-	// اسم المجموعة المستهدفة لتوجيه طلبات مساعدة الطلاب (Leads)
-	TARGET_LEADS_GROUP: 'طلبات الطلاب',
+	// معرف مجموعة "طلبات الطلاب" لتوجيه طلبات مساعدة الطلاب (Leads)
+	TARGET_LEADS_GROUP: process.env.TARGET_LEADS_GROUP || '120363428139488465@g.us',
 
 	// مفتاح Gemini API
 	GEMINI_API_KEY: process.env.GEMINI_API_KEY || 'AQ.Ab8RN6JBRB1fvWhTibqsPdcOLmaFe0eDhUkhQlhrtrUePNyeJA',
@@ -14,11 +14,17 @@ export const config = {
 	// مفتاح MiniMax API (بديل ثانوي)
 	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'dahl_C6h9Xz53HBtjmT1kKK2GpPqoLvJvQW1Ki',
 
-	// الجلسات النشطة للمراقبة (account_1 للقراءة فقط، account_2 للإرسال فقط)
+	// الجلسات النشطة
 	SESSIONS: ['account_1', 'account_2'],
 
-	// الجلسة المسؤولة عن توجيه الرسائل والإرسال للمجموعات
+	// حساب القراءة فقط: يراقب القروبات المصدر ويلتقط الروابط/الطلبات
+	READER_SESSION: 'account_2',
+
+	// حساب الإرسال فقط: يرسل لمجموعة العمل / طلبات الطلاب — لا يقرأ رسائل المصدر
 	SENDER_SESSION: 'account_1',
+
+	// إيقاف أنبوب طلبات الطلاب مؤقتاً (SLIE) — الروابط تبقى شغّالة
+	ENABLE_STUDENT_LEADS: false,
 }
 
 /**
