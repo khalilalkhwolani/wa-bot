@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { SESSIONS_DIR } from '../config'
 import { UserBehavior, DynamicRule } from '../slie/types'
 
 export interface Lead {
@@ -17,7 +18,7 @@ export interface Lead {
 }
 
 class JsonDatabase {
-	private filePath = path.join('sessions', 'leads_database.json')
+	private filePath = path.join(SESSIONS_DIR, 'leads_database.json')
 	private leads: Lead[] = []
 	private behaviors: { [phone: string]: UserBehavior } = {}
 	private dynamicRules: DynamicRule[] = []

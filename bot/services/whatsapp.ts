@@ -7,11 +7,16 @@ import makeWASocket, {
 	useMultiFileAuthState
 } from '../../src'
 import P from 'pino'
-import qrcode from 'qrcode-terminal'
-import path from 'path'
 import fs from 'fs'
 import PQueue from 'p-queue'
-import { config, normalizeArabic } from '../config'
+import {
+	config,
+	getAuthFolder,
+	getRoleLabel,
+	isReaderSession,
+	isSenderSession,
+	normalizeArabic
+} from '../config'
 import { db } from '../database/database'
 import {
 	runSLIEPipeline,
@@ -19,6 +24,7 @@ import {
 	processModeratorFeedback,
 	SLIEMessage
 } from '../slie'
+import { persistSessionRemote, scheduleSessionPersist } from './sessionStore'
 
 // إعداد السجلات بنفس الهيئة النظيفة
 const logger = P({
@@ -40,6 +46,23 @@ export const activeSockets = new Map<string, any>()
 // خريطة لتخزين رموز الـ QR الحية لعرضها على صفحة الويب (Session ID -> QR String)
 export const sessionQRs = new Map<string, string>()
 
+// سجل الأحداث الحية لمراقبة نشاط البوت في الوقت الفعلي
+export interface LiveEvent {
+	time: string
+	message: string
+	type: 'info' | 'success' | 'warn' | 'link'
+}
+
+export const liveEvents: LiveEvent[] = []
+
+export function addLiveEvent(message: string, type: 'info' | 'success' | 'warn' | 'link' = 'info') {
+	const time = new Date().toLocaleTimeString('ar-EG', { hour12: false })
+	liveEvents.unshift({ time, message, type })
+	if (liveEvents.length > 50) {
+		liveEvents.pop()
+	}
+}
+
 // وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
 const botStartupTime = Date.now()
 
@@ -47,32 +70,56 @@ const botStartupTime = Date.now()
 const sessionLinksQueues = new Map<string, PQueue>()
 const sessionLeadsQueues = new Map<string, PQueue>()
 
-function isReaderSession(sessionId: string): boolean {
-	return sessionId === (config.READER_SESSION || sessionId)
-}
+/** محاولات إعادة الاتصال لكل جلسة (للـ backoff) */
+const reconnectAttempts = new Map<string, number>()
+/** منع جدولة أكثر من إعادة اتصال واحدة في الوقت نفسه */
+const reconnectScheduled = new Set<string>()
+/** منع تشغيل جلستين متزامنتين لنفس الحساب */
+const startingSessions = new Set<string>()
 
-function isSenderSession(sessionId: string): boolean {
-	return sessionId === (config.SENDER_SESSION || sessionId)
+function scheduleReconnect(sessionId: string, reason: string) {
+	if (reconnectScheduled.has(sessionId)) return
+	reconnectScheduled.add(sessionId)
+
+	const attempt = (reconnectAttempts.get(sessionId) || 0) + 1
+	reconnectAttempts.set(sessionId, attempt)
+	const delayMs = Math.min(Math.round(5000 * Math.pow(1.5, attempt - 1)), 60_000)
+
+	logger.info(`🔄 [${sessionId}] إعادة اتصال خلال ${Math.round(delayMs / 1000)}ث (محاولة ${attempt}) — ${reason}`)
+	addLiveEvent(`🔄 إعادة اتصال [${sessionId}] خلال ${Math.round(delayMs / 1000)}ث...`, 'info')
+
+	setTimeout(() => {
+		reconnectScheduled.delete(sessionId)
+		startWhatsAppSession(sessionId).catch(err => {
+			logger.error(`❌ فشل إعادة تشغيل الجلسة [${sessionId}]: ${err}`)
+			scheduleReconnect(sessionId, 'فشل التشغيل')
+		})
+	}, delayMs)
 }
 
 /**
  * دالة لتشغيل وإدارة جلسة عمل واتساب
  */
 export async function startWhatsAppSession(sessionId: string) {
-	const role = isReaderSession(sessionId)
-		? 'قارئ فقط'
-		: isSenderSession(sessionId)
-			? 'مرسل فقط'
-			: 'عام'
-	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}] (${role})...`)
+	if (startingSessions.has(sessionId)) {
+		logger.warn(`⏳ [${sessionId}] تهيئة قيد التنفيذ — تم تجاهل طلب مكرر`)
+		return
+	}
+	startingSessions.add(sessionId)
 
+	const role = getRoleLabel(sessionId)
+	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}] (${role})...`)
+	addLiveEvent(`🔌 جاري تهيئة الاتصال للحساب [${sessionId}] (${role})...`, 'info')
+
+	try {
 	// إنشاء طوابير إرسال مستقلة
 	const linksQueue = new PQueue({ concurrency: 1 })
 	const leadsQueue = new PQueue({ concurrency: 1 })
 	sessionLinksQueues.set(sessionId, linksQueue)
 	sessionLeadsQueues.set(sessionId, leadsQueue)
 
-	const authFolder = path.join('sessions', `auth_info_${sessionId}`)
+	const authFolder = getAuthFolder(sessionId)
+	fs.mkdirSync(authFolder, { recursive: true })
 	const { state, saveCreds } = await useMultiFileAuthState(authFolder)
 	const { version } = await fetchLatestBaileysVersion()
 
@@ -92,7 +139,7 @@ export async function startWhatsAppSession(sessionId: string) {
 	const sock = makeWASocket({
 		version,
 		logger: P({ level: 'silent' }),
-		printQRInTerminal: true,
+		printQRInTerminal: false,
 		auth: {
 			creds: state.creds,
 			keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -106,27 +153,11 @@ export async function startWhatsAppSession(sessionId: string) {
 		defaultQueryTimeoutMs: 20_000,
 	})
 
-	// حفظ حالة المصادقة عند التحديث
-	sock.ev.on('creds.update', saveCreds)
-
-	// طلب كود الربط المباشر بالرقم (Pairing Code) بدون الحاجة لمسح QR
-	const rawPhone = config.PHONE_NUMBERS?.[sessionId]
-	const phone = rawPhone ? rawPhone.replace(/[^0-9]/g, '') : undefined
-
-	if (phone && !sock.authState.creds.registered) {
-		setTimeout(async () => {
-			try {
-				const pairingCode = await sock.requestPairingCode(phone)
-				console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-				console.log(`📱 كود ربط واتساب للحساب [${sessionId}] (الرقم: ${phone}):`)
-				console.log(`\n           👉👉👉   ${pairingCode}   👈👈👈\n`)
-				console.log(`(افتح واتساب > الأجهزة المرتبطة > ربط جهاز > الربط برقم الهاتف > أدخل هذا الكود)`)
-				console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-			} catch (err) {
-				logger.error(`❌ فشل طلب كود الربط للحساب [${sessionId}]: ${err}`)
-			}
-		}, 4000)
-	}
+	// حفظ حالة المصادقة محليًا + نسخة سحابية مجانية (Upstash) لتبقى بعد Deploy
+	sock.ev.on('creds.update', async () => {
+		await saveCreds()
+		scheduleSessionPersist(sessionId)
+	})
 
 	// التعامل مع تحديثات الاتصال وإعادة الاتصال الذكية
 	sock.ev.on('connection.update', async (update) => {
@@ -135,12 +166,22 @@ export async function startWhatsAppSession(sessionId: string) {
 		if (qr) {
 			sessionQRs.set(sessionId, qr)
 			logger.info(`📸 تم توليد رمز QR جديد للحساب [${sessionId}] — متاح بصورة نقية على الرابط المباشر`)
+			addLiveEvent(`📸 تم توليد رمز QR جديد للحساب [${sessionId}] - متاح للمسح على الرابط`, 'info')
 		}
 
 		if (connection === 'close') {
 			activeSockets.delete(sessionId)
-			const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-			logger.error(`❌ انقطع الاتصال للحساب [${sessionId}]. السبب: ${lastDisconnect?.error}`)
+			const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+			const errMsg = lastDisconnect?.error?.message || String(lastDisconnect?.error || 'unknown')
+			const isLoggedOut = statusCode === DisconnectReason.loggedOut
+
+			logger.error(
+				`❌ انقطع الاتصال للحساب [${sessionId}]. statusCode=${statusCode ?? 'n/a'} السبب: ${errMsg}`
+			)
+			addLiveEvent(
+				`⚠️ انقطع [${sessionId}] (code=${statusCode ?? 'n/a'}): ${errMsg}`,
+				'warn'
+			)
 
 			try {
 				(sock.ev as any)?.removeAllListeners?.()
@@ -150,24 +191,36 @@ export async function startWhatsAppSession(sessionId: string) {
 				// تجاهل
 			}
 
-			if (shouldReconnect) {
-				logger.info(`🔄 جاري محاولة إعادة الاتصال خلال 5 ثوانٍ للحساب [${sessionId}]...`)
-				setTimeout(() => startWhatsAppSession(sessionId), 5000)
-			} else {
-				logger.warn(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. جاري تنظيف الجلسة القديمة وتوليد رمز QR جديد...`)
+			// المسح فقط عند logout حقيقي (401) حتى يظهر باركود جديد.
+			// أخطاء الشبكة/الإغلاق العابر لا تمس مجلد الجلسة أبدًا.
+			if (isLoggedOut) {
+				logger.warn(
+					`⚠️ [${sessionId}] loggedOut (${statusCode}) — مسح جلسة هذا الحساب فقط لتوليد ربط جديد`
+				)
+				addLiveEvent(
+					`⚠️ [${sessionId}] تم فك الربط من واتساب — جاري تجهيز باركود جديد`,
+					'warn'
+				)
 				try {
 					if (fs.existsSync(authFolder)) {
 						fs.rmSync(authFolder, { recursive: true, force: true })
 					}
-				} catch (e) {
+				} catch {
 					// تجاهل
 				}
-				setTimeout(() => startWhatsAppSession(sessionId), 3000)
+				reconnectAttempts.set(sessionId, 0)
 			}
+
+			scheduleReconnect(sessionId, isLoggedOut ? 'loggedOut-إعادة-ربط' : `close-${statusCode ?? 'n/a'}`)
 		} else if (connection === 'open') {
+			reconnectAttempts.set(sessionId, 0)
+			reconnectScheduled.delete(sessionId)
 			sessionQRs.delete(sessionId)
 			activeSockets.set(sessionId, sock)
-			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role})!`)
+			const userPhone = sock.user?.id ? sock.user.id.split(':')[0] : 'متصل'
+			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role}) - الرقم: ${userPhone}!`)
+			addLiveEvent(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}] (${role}) - الرقم: +${userPhone}`, 'success')
+			persistSessionRemote(sessionId).catch(() => {})
 			// لا نجمّد حدث الاتصال: جلب المجموعات في الخلفية بمهلة قصيرة
 			lookupGroupJids(sock, sessionId).catch(err => {
 				logger.warn(`⚠️ [${sessionId}] فشل جلب المجموعات في الخلفية: ${err}`)
@@ -287,6 +340,9 @@ export async function startWhatsAppSession(sessionId: string) {
 			}
 		}
 	})
+	} finally {
+		startingSessions.delete(sessionId)
+	}
 }
 
 /**
@@ -455,8 +511,10 @@ ${cleanLinks.join('\n')}`
 			})
 
 			logger.info(`✅ [${sessionId}] وصل الإرسال: msgId=${sent.key.id} | الوجهة=${linksGroupJid} | عبر=${usedSender}`)
+			addLiveEvent(`🚀 [${usedSender}] تم توجيه رابط #${nextNumber} بنجاح من [${groupName}] إلى مجموعة العمل`, 'success')
 		} catch (err) {
 			logger.error(`❌ [${sessionId}] فشل إرسال الرابط إلى ${linksGroupJid} عبر [${usedSender}]: ${err}`)
+			addLiveEvent(`❌ فشل إرسال الرابط #${nextNumber}: ${err}`, 'warn')
 		}
 	})
 }

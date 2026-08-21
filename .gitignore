@@ -19,5 +19,4 @@ test.ts
 TestData
 wa-logs*
 coverage
-sessions/
-sessions/*
+# sessions/ متعمّد غير متجاهل: المستودع Private ورفع الجلسات مع النشر على Render المجاني
