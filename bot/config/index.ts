@@ -25,6 +25,12 @@ export const config = {
 
 	// إيقاف أنبوب طلبات الطلاب مؤقتاً (SLIE) — الروابط تبقى شغّالة
 	ENABLE_STUDENT_LEADS: false,
+
+	// أرقام الهواتف لتوليد كود الربط (Pairing Code) مباشرة بدون الحاجة لمسح QR
+	PHONE_NUMBERS: {
+		account_1: process.env.PHONE_ACCOUNT_1 || '967776007366',
+		account_2: process.env.PHONE_ACCOUNT_2 || '966579010262'
+	} as Record<string, string>,
 }
 
 /**

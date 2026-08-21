@@ -9,6 +9,7 @@ import makeWASocket, {
 import P from 'pino'
 import qrcode from 'qrcode-terminal'
 import path from 'path'
+import fs from 'fs'
 import PQueue from 'p-queue'
 import { config, normalizeArabic } from '../config'
 import { db } from '../database/database'
@@ -104,6 +105,25 @@ export async function startWhatsAppSession(sessionId: string) {
 
 	// حفظ حالة المصادقة عند التحديث
 	sock.ev.on('creds.update', saveCreds)
+
+	// طلب كود الربط المباشر بالرقم (Pairing Code) بدون الحاجة لمسح QR
+	const rawPhone = config.PHONE_NUMBERS?.[sessionId]
+	const phone = rawPhone ? rawPhone.replace(/[^0-9]/g, '') : undefined
+
+	if (phone && !sock.authState.creds.registered) {
+		setTimeout(async () => {
+			try {
+				const pairingCode = await sock.requestPairingCode(phone)
+				console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+				console.log(`📱 كود ربط واتساب للحساب [${sessionId}] (الرقم: ${phone}):`)
+				console.log(`\n           👉👉👉   ${pairingCode}   👈👈👈\n`)
+				console.log(`(افتح واتساب > الأجهزة المرتبطة > ربط جهاز > الربط برقم الهاتف > أدخل هذا الكود)`)
+				console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+			} catch (err) {
+				logger.error(`❌ فشل طلب كود الربط للحساب [${sessionId}]: ${err}`)
+			}
+		}, 4000)
+	}
 
 	// التعامل مع تحديثات الاتصال وإعادة الاتصال الذكية
 	sock.ev.on('connection.update', async (update) => {
