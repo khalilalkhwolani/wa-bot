@@ -20,7 +20,7 @@ export const config = {
 	SESSIONS: ['account_1', 'account_2'],
 
 	// الحساب الذي يرسل لمجموعة العمل
-	SENDER_SESSION: 'account_2',
+	SENDER_SESSION: 'account_1',
 
 	// إيقاف طلبات الطلاب — الروابط فقط
 	ENABLE_STUDENT_LEADS: false,
