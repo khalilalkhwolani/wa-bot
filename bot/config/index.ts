@@ -17,10 +17,13 @@ export const config = {
 	MINIMAX_API_KEY: process.env.MINIMAX_API_KEY || 'dahl_C6h9Xz53HBtjmT1kKK2GpPqoLvJvQW1Ki',
 
 	// الجلسات النشطة
-	SESSIONS: ['account_1', 'account_2'],
+	SESSIONS: ['account_1', 'account_2', 'account_3'],
 
 	// الحساب الذي يرسل لمجموعة العمل
 	SENDER_SESSION: 'account_1',
+
+	// حسابات مراقبة فقط: تقرأ وتلتقط الرسائل ولا يُسمح لها بالإرسال
+	READ_ONLY_SESSIONS: ['account_3'],
 
 	// إيقاف طلبات الطلاب — الروابط فقط
 	ENABLE_STUDENT_LEADS: false,

@@ -47,6 +47,10 @@ const sessionLeadsQueues = new Map<string, PQueue>()
 const startingSessions = new Set<string>()
 const reconnectScheduled = new Set<string>()
 
+function isReadOnlySession(sessionId: string): boolean {
+	return ((config as any).READ_ONLY_SESSIONS || []).includes(sessionId)
+}
+
 /**
  * دالة لتشغيل وإدارة جلسة عمل واتساب
  */
@@ -144,7 +148,8 @@ export async function startWhatsAppSession(sessionId: string) {
 		} else if (connection === 'open') {
 			reconnectScheduled.delete(sessionId)
 			activeSockets.set(sessionId, sock)
-			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]!`)
+			const mode = isReadOnlySession(sessionId) ? ' (قراءة فقط)' : ''
+			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]${mode}!`)
 			lookupGroupJids(sock, sessionId).catch(err => {
 				logger.warn(`⚠️ [${sessionId}] تنبيه جلب المجموعات: ${err}`)
 			})
@@ -411,6 +416,10 @@ ${cleanLinks.join('\n')}`
 				senderSock = activeSockets.get(senderSessionId)
 			}
 		}
+		if (!senderSock && isReadOnlySession(sessionId)) {
+			logger.warn(`⏸️ [${sessionId}] الحساب للقراءة فقط والمرسل [${senderSessionId}] غير متصل — تم تأجيل الإرسال`)
+			return
+		}
 		senderSock = senderSock || sock
 		const usedSender = activeSockets.get(senderSessionId) ? senderSessionId : `${sessionId}(fallback)`
 
@@ -562,7 +571,12 @@ ${groupLink ? `👥 ${groupLink}` : ''}`
 		await new Promise(resolve => setTimeout(resolve, sleepTime))
 
 		// جلب مقبس الإرسال المخصص
-		const senderSock = activeSockets.get(senderSessionId) || sock
+		const configuredSenderSock = activeSockets.get(senderSessionId)
+		if (!configuredSenderSock && isReadOnlySession(sessionId)) {
+			logger.warn(`⏸️ [${sessionId}] الحساب للقراءة فقط والمرسل [${senderSessionId}] غير متصل — تم إلغاء إرسال التنبيه`)
+			return
+		}
+		const senderSock = configuredSenderSock || sock
 
 		try {
 			const sent = await senderSock.sendMessage(leadsGroupJid, { text: alertMessage })
@@ -582,6 +596,10 @@ ${groupLink ? `👥 ${groupLink}` : ''}`
  */
 async function handleModeratorReaction(sock: any, sessionId: string, sentMessageId: string, emoji: string) {
 	try {
+		if (isReadOnlySession(sessionId)) {
+			logger.info(`⏭️ [${sessionId}] تجاهل الرد على التفاعل لأن الحساب للقراءة فقط`)
+			return
+		}
 		const isTrueHelp = emoji === '👍' || emoji === '✅'
 		const isFalseAd = emoji === '👎' || emoji === '❌'
 
