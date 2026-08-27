@@ -23,6 +23,9 @@ coverage
 # آلاف ملفات الجلسة الخام — لا تُرفع
 sessions/
 
+# عزل جلسات فاسدة/قديمة — لا تُرفع
+recovery/
+
 # حزمة واحدة لكل حساب تُرفع مع المستودع Private
 !sessions-backup/
 !sessions-backup/*.json

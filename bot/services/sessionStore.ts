@@ -31,8 +31,13 @@ export function packSessionFolder(sessionId: string): SessionFiles | null {
 	const files: SessionFiles = {}
 	for (const name of fs.readdirSync(dir)) {
 		const full = path.join(dir, name)
-		if (!fs.statSync(full).isFile()) continue
-		files[name] = fs.readFileSync(full, 'utf8')
+		try {
+			if (!fs.statSync(full).isFile()) continue
+			files[name] = fs.readFileSync(full, 'utf8')
+		} catch {
+			// ملف اختفى أثناء التحزيم (تدوير مفاتيح واتساب) — نتخطاه
+			continue
+		}
 	}
 	return Object.keys(files).length ? files : null
 }

@@ -12,6 +12,14 @@ import path from 'path'
 import PQueue from 'p-queue'
 import { config, normalizeArabic } from '../config'
 import { db } from '../database/database'
+import {
+	claimLinkForSending,
+	isSupabaseLinkStoreConfigured,
+	markLinkFailed,
+	markLinkSent,
+	parseWhatsAppLink,
+} from '../database/supabaseLinks'
+import type { LinkClaim, LinkIdentity } from '../database/supabaseLinks'
 import { 
 	runSLIEPipeline, 
 	contextBuilder, 
@@ -35,13 +43,70 @@ const groupNamesMap = new Map<string, string>()
 
 // خريطة لتخزين اتصالات الجلسات النشطة لمشاركتها (Session ID -> socket)
 export const activeSockets = new Map<string, any>()
+const sentLinkMessages = new Map<string, { linkId: string; serial: number; targetJid: string }>()
+const verifiedSenderTargets = new Set<string>()
 
 // وقت تشغيل البوت لتفادي معالجة الرسائل القديمة المؤرشفة
 const botStartupTime = Date.now()
 
-// خرائط طوابير الإرسال (Session ID -> PQueue)
-const sessionLinksQueues = new Map<string, PQueue>()
+// طابور عالمي واحد للروابط: يمنع سباق الترقيم بين حسابات المراقبة
+const linksQueue = new PQueue({ concurrency: 1 })
 const sessionLeadsQueues = new Map<string, PQueue>()
+
+// واتساب قد يعيد حدث notify نفسه أكثر من مرة؛ نمنع إعادة معالجة نفس الرسالة محليًا.
+const recentlyProcessedMessages = new Map<string, number>()
+const duplicateLinkLogTimes = new Map<string, number>()
+const MESSAGE_DEDUP_TTL_MS = 10 * 60 * 1000
+const DUPLICATE_LOG_TTL_MS = 60 * 1000
+
+function isRepeatedMessage(sessionId: string, msg: any): boolean {
+	const messageId = msg.key?.id
+	if (!messageId) return false
+	const key = `${sessionId}|${msg.key?.remoteJid || ''}|${messageId}`
+	const now = Date.now()
+	const seenAt = recentlyProcessedMessages.get(key)
+	recentlyProcessedMessages.set(key, now)
+
+	if (recentlyProcessedMessages.size > 20_000) {
+		for (const [storedKey, storedAt] of recentlyProcessedMessages) {
+			if (now - storedAt > MESSAGE_DEDUP_TTL_MS) recentlyProcessedMessages.delete(storedKey)
+		}
+	}
+	return seenAt !== undefined && now - seenAt <= MESSAGE_DEDUP_TTL_MS
+}
+
+function shouldLogDuplicate(sessionId: string, canonicalKey: string): boolean {
+	const key = `${sessionId}|${canonicalKey}`
+	const now = Date.now()
+	const previous = duplicateLinkLogTimes.get(key)
+	duplicateLinkLogTimes.set(key, now)
+	return previous === undefined || now - previous > DUPLICATE_LOG_TTL_MS
+}
+
+async function claimLinkWithRecovery(
+	input: Parameters<typeof claimLinkForSending>[0],
+	sessionId: string,
+	link: LinkIdentity
+): Promise<LinkClaim> {
+	let outageAttempt = 0
+	for (;;) {
+		try {
+			return await claimLinkForSending(input)
+		} catch (error) {
+			const message = String(error)
+			const transient = message.includes('failed after 3 attempts')
+			if (!transient) throw error
+
+			outageAttempt += 1
+			const delayMs = Math.min(60_000, 5_000 * 2 ** Math.min(outageAttempt - 1, 4))
+			logger.warn(
+				`⏳ [${sessionId}] Supabase غير متاح مؤقتًا؛ الرابط ${link.canonicalKey} محفوظ في الطابور ` +
+				`وستعاد المحاولة بعد ${Math.round(delayMs / 1000)} ثوانٍ (محاولة الاستعادة ${outageAttempt})`
+			)
+			await new Promise(resolve => setTimeout(resolve, delayMs))
+		}
+	}
+}
 
 /** منع تشغيل/إعادة اتصال مزدوج لنفس الحساب */
 const startingSessions = new Set<string>()
@@ -49,6 +114,15 @@ const reconnectScheduled = new Set<string>()
 
 function isReadOnlySession(sessionId: string): boolean {
 	return ((config as any).READ_ONLY_SESSIONS || []).includes(sessionId)
+}
+
+function jidUser(jid: unknown): string {
+	return String(jid || '').split('@')[0].split(':')[0]
+}
+
+function maskedJid(jid: unknown): string {
+	const user = jidUser(jid)
+	return user ? `***${user.slice(-4)}` : 'غير معروف'
 }
 
 /**
@@ -65,9 +139,7 @@ export async function startWhatsAppSession(sessionId: string) {
 	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}]...`)
 
 	// إنشاء طوابير إرسال مستقلة
-	const linksQueue = new PQueue({ concurrency: 1 })
 	const leadsQueue = new PQueue({ concurrency: 1 })
-	sessionLinksQueues.set(sessionId, linksQueue)
 	sessionLeadsQueues.set(sessionId, leadsQueue)
 
 	const authFolder = path.join('sessions', `auth_info_${sessionId}`)
@@ -107,6 +179,50 @@ export async function startWhatsAppSession(sessionId: string) {
 	// حفظ حالة المصادقة عند التحديث
 	sock.ev.on('creds.update', saveCreds)
 
+	// متابعة تأكيدات واتساب للروابط المرسلة، بدل الاكتفاء بإنشاء معرف الرسالة.
+	sock.ev.on('messages.update', (updates: any[]) => {
+		const statusNames: Record<number, string> = {
+			0: 'ERROR',
+			1: 'PENDING',
+			2: 'SERVER_ACK',
+			3: 'DELIVERED',
+			4: 'READ',
+			5: 'PLAYED',
+		}
+		for (const item of updates) {
+			const messageId = item.key?.id
+			const tracked = messageId ? sentLinkMessages.get(messageId) : undefined
+			if (!tracked || item.update?.status == null) continue
+			const status = Number(item.update.status)
+			logger.info(`📬 الرابط #${tracked.serial} حالة واتساب=${statusNames[status] || status} الوجهة=${tracked.targetJid}`)
+			if (status === 0) {
+				markLinkFailed(tracked.linkId, 'WhatsApp reported message status ERROR').catch(error => {
+					logger.error(`❌ تعذر تسجيل فشل الرابط #${tracked.serial}: ${error}`)
+				})
+				sentLinkMessages.delete(messageId)
+			} else if (status >= 2) {
+				markLinkSent(tracked.linkId, messageId).then(() => {
+					logger.info(`✅ تأكد وصول الرابط #${tracked.serial} من واتساب (${statusNames[status] || status})`)
+					sentLinkMessages.delete(messageId)
+				}).catch(error => logger.error(`❌ تعذر تثبيت وصول الرابط #${tracked.serial}: ${error}`))
+			}
+		}
+	})
+
+	// في المجموعات تصل تأكيدات التسليم عادةً كإيصالات خاصة بكل عضو.
+	sock.ev.on('message-receipt.update', (updates: any[]) => {
+		for (const item of updates) {
+			const messageId = item.key?.id
+			const tracked = messageId ? sentLinkMessages.get(messageId) : undefined
+			if (!tracked) continue
+			if (!item.receipt?.receiptTimestamp && !item.receipt?.readTimestamp) continue
+			markLinkSent(tracked.linkId, messageId).then(() => {
+				logger.info(`✅ تأكد تسليم الرابط #${tracked.serial} داخل مجموعة واتساب (${tracked.targetJid})`)
+				sentLinkMessages.delete(messageId)
+			}).catch(error => logger.error(`❌ تعذر تثبيت تسليم الرابط #${tracked.serial}: ${error}`))
+		}
+	})
+
 	// التعامل مع تحديثات الاتصال وإعادة الاتصال الذكية
 	sock.ev.on('connection.update', async (update) => {
 		const { connection, lastDisconnect, qr } = update
@@ -118,6 +234,7 @@ export async function startWhatsAppSession(sessionId: string) {
 
 		if (connection === 'close') {
 			activeSockets.delete(sessionId)
+			verifiedSenderTargets.delete(`${sessionId}|${config.TARGET_LINKS_GROUP}`)
 			const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
 			const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 			logger.error(
@@ -163,6 +280,7 @@ export async function startWhatsAppSession(sessionId: string) {
 		for (const msg of upsert.messages) {
 			if (msg.key.fromMe) continue
 			if (msg.key.remoteJid && isJidNewsletter(msg.key.remoteJid)) continue
+			if (isRepeatedMessage(sessionId, msg)) continue
 
 			// تجنب معالجة أي رسائل مرسلة داخل مجموعات التوجيه والعمل الخاصة بالبوت نفسه لتفادي حلقات التغذية الراجعة
 			const isTargetGroup = [...sessionLinksGroupJids.values()].includes(msg.key.remoteJid || '') ||
@@ -276,6 +394,31 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 	if (config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us')) {
 		sessionLinksGroupJids.set(sessionId, config.TARGET_LINKS_GROUP)
 		logger.info(`🎯 تم تعيين مجموعة الروابط مباشرة بالمعرف الفريد (JID): ${config.TARGET_LINKS_GROUP}`)
+		if (sessionId === config.SENDER_SESSION) {
+			try {
+				const metadata = await sock.groupMetadata(config.TARGET_LINKS_GROUP)
+				logger.info(`📨 مجموعة إرسال الروابط الفعلية: "${metadata?.subject || 'غير معروف'}" (${config.TARGET_LINKS_GROUP})`)
+				const ownUsers = new Set([jidUser(sock.user?.id), jidUser(sock.user?.lid)].filter(Boolean))
+				const ownParticipant = metadata?.participants?.find((participant: any) =>
+					[participant.id, participant.lid, participant.phoneNumber].some(jid => ownUsers.has(jidUser(jid)))
+				)
+				const isAdmin = Boolean(
+					ownParticipant?.isAdmin || ownParticipant?.isSuperAdmin ||
+					ownParticipant?.admin === 'admin' || ownParticipant?.admin === 'superadmin'
+				)
+				const canSend = Boolean(ownParticipant) && (!metadata?.announce || isAdmin)
+				logger.info(
+					`🔐 حساب الإرسال=${maskedJid(sock.user?.id)} عضو=${Boolean(ownParticipant)} ` +
+					`مشرف=${isAdmin} المجموعة_للمشرفين_فقط=${Boolean(metadata?.announce)}`
+				)
+				if (!canSend) {
+					throw new Error(`حساب الإرسال [${sessionId}] ليس عضوًا مخولًا بالإرسال داخل مجموعة العمل`)
+				}
+				verifiedSenderTargets.add(`${sessionId}|${config.TARGET_LINKS_GROUP}`)
+			} catch (error) {
+				logger.error(`❌ تعذر على حساب الإرسال التحقق من مجموعة الروابط ${config.TARGET_LINKS_GROUP}: ${error}`)
+			}
+		}
 	}
 	if (config.TARGET_LEADS_GROUP && config.TARGET_LEADS_GROUP.endsWith('@g.us')) {
 		sessionLeadsGroupJids.set(sessionId, config.TARGET_LEADS_GROUP)
@@ -361,28 +504,24 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 		return
 	}
 
-	const queue = sessionLinksQueues.get(sessionId)
-	if (!queue) return
-
-	queue.add(async () => {
-		const cleanLinks = links.map(l => l.link)
+	linksQueue.add(async () => {
+		const cleanLinks = [...new Map(
+			links
+				.map(item => parseWhatsAppLink(item.link))
+				.filter((item): item is NonNullable<typeof item> => item !== null)
+				.map(item => [item.canonicalKey, item.url])
+		).values()]
 		if (cleanLinks.length === 0) return
 
-		// منع التكرار — لكن فقط للروابط التي أُرسلت فعلاً من قبل
-		if (await db.hasLinkBeenSent(cleanLinks[0])) {
-			logger.info(`⏭️ [${sessionId}] رابط مكرر (مُرسل سابقاً) تم تجاهله: ${cleanLinks[0]}`)
+		if (!isSupabaseLinkStoreConfigured()) {
+			logger.error(`⏸️ [${sessionId}] قاعدة Supabase للروابط غير مضبوطة — تم إيقاف الإرسال لمنع التكرار`)
 			return
 		}
 
 		const rawParticipant = msg.key.participantAlt || msg.key.participant || msg.key.remoteJid || ''
 		const linkPhone = rawParticipant.split('@')[0].split(':')[0] || 'غير معروف'
 
-		// 1. حساب رقم التسلسل للرابط الجديد
-		const leads = await db.getLeads()
-		const linkCount = leads.filter(l => l.subject === 'رابط مجموعة').length
-		const nextNumber = linkCount + 1
-
-		// 2. تحديد اسم المجموعة المصدر
+		// تحديد اسم المجموعة المصدر مرة واحدة لكل رسالة
 		let groupName = 'غير معروف'
 		if (msg.key.remoteJid) {
 			if (msg.key.remoteJid.endsWith('@g.us')) {
@@ -403,56 +542,79 @@ async function handleGroupLinks(sock: any, sessionId: string, msg: any, text: st
 			}
 		}
 
-		// 3. تنسيق الرسالة بنفس الشكل المطلوب في الصورة
-		const alertMessage = `🔗 *رابط واتساب جديد #${nextNumber}*
-*المصدر:* ${groupName}
-${cleanLinks.join('\n')}`
+		for (const rawLink of cleanLinks) {
+			const link = parseWhatsAppLink(rawLink)
+			if (!link) continue
 
-		// انتظر المرسل إن كان يعيد الاتصال (يمنع خطأ attrs عند انقطاع 408)
-		let senderSock = activeSockets.get(senderSessionId)
-		if (!senderSock && senderSessionId !== sessionId) {
+			if (config.LINK_FORWARDING_DRY_RUN) {
+				logger.info(`🧪 [${sessionId}] dry-run: تم رصد ${link.canonicalKey} دون حجز رقم أو إرسال`)
+				continue
+			}
+
+			let claim
+			try {
+				claim = await claimLinkWithRecovery({
+					link,
+					sessionId,
+					sourceGroupJid: msg.key.remoteJid || undefined,
+					sourceGroupName: groupName,
+					sourceMessageId: msg.key.id || undefined,
+					sourceSenderJid: rawParticipant || undefined,
+					observedAt: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000).toISOString() : undefined,
+				}, sessionId, link)
+			} catch (err) {
+				logger.error(`⏸️ [${sessionId}] فشل حجز الرابط في Supabase؛ لن يتم الإرسال: ${err}`)
+				continue
+			}
+
+			if (!claim.shouldSend || claim.displaySerial == null) {
+				if (shouldLogDuplicate(sessionId, link.canonicalKey)) {
+					logger.info(`⏭️ [${sessionId}] رابط مكرر/محجوز تم تجاهله: ${link.canonicalKey} (${claim.currentStatus})`)
+				}
+				continue
+			}
+
+			let senderSock = activeSockets.get(senderSessionId)
 			for (let i = 0; i < 6 && !senderSock; i++) {
 				await new Promise(r => setTimeout(r, 2000))
 				senderSock = activeSockets.get(senderSessionId)
 			}
-		}
-		if (!senderSock && isReadOnlySession(sessionId)) {
-			logger.warn(`⏸️ [${sessionId}] الحساب للقراءة فقط والمرسل [${senderSessionId}] غير متصل — تم تأجيل الإرسال`)
-			return
-		}
-		senderSock = senderSock || sock
-		const usedSender = activeSockets.get(senderSessionId) ? senderSessionId : `${sessionId}(fallback)`
-
-		logger.info(`📤 [${sessionId}] محاولة إرسال رابط إلى JID=${linksGroupJid} عبر [${usedSender}]`)
-
-		try {
-			// تعطيل معاينة الرابط: واتساب أحياناً يقبل الإرسال ثم يحجب ظهور روابط المجموعات مع الـ preview
-			const sent = await senderSock.sendMessage(
-				linksGroupJid,
-				{ text: alertMessage },
-				{ linkPreview: false }
-			)
-
-			if (!sent?.key?.id) {
-				logger.error(`❌ [${sessionId}] الإرسال رجع بدون معرف رسالة — الرسالة غالباً لم تصل. الوجهة: ${linksGroupJid}`)
-				return
+			if (!senderSock) {
+				await markLinkFailed(claim.linkId, `Sender ${senderSessionId} is offline`).catch(() => {})
+				logger.warn(`⏸️ [${sessionId}] المرسل الوحيد [${senderSessionId}] غير متصل — لن يستخدم النظام حسابًا بديلًا`)
+				continue
+			}
+			if (!verifiedSenderTargets.has(`${senderSessionId}|${linksGroupJid}`)) {
+				await markLinkFailed(claim.linkId, `Sender ${senderSessionId} is not verified for target ${linksGroupJid}`).catch(() => {})
+				logger.error(`⏸️ [${sessionId}] لم يتم التحقق من صلاحية [${senderSessionId}] للإرسال إلى ${linksGroupJid}`)
+				continue
 			}
 
-			// نحفظ في القاعدة فقط بعد نجاح الإرسال الحقيقي حتى لا نمنع إعادة المحاولة
-			await db.insertLead({
-				studentPhone: linkPhone,
-				studentName: msg.pushName || 'غير مسجل',
-				originalGroup: groupName,
-				messageContent: cleanLinks[0],
-				classification: 'DISCUSSION',
-				subject: 'رابط مجموعة',
-				score: 50,
-				confidence: 0.8
-			})
+			const alertMessage = `🔗 *رابط واتساب جديد #${claim.displaySerial}*
+*المصدر:* ${groupName}
+${link.url}`
 
-			logger.info(`✅ [${sessionId}] وصل الإرسال: msgId=${sent.key.id} | الوجهة=${linksGroupJid} | عبر=${usedSender}`)
-		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل إرسال الرابط إلى ${linksGroupJid} عبر [${usedSender}]: ${err}`)
+			try {
+				const sent = await senderSock.sendMessage(linksGroupJid, { text: alertMessage }, { linkPreview: false })
+				if (!sent?.key?.id) throw new Error('WhatsApp send returned no message id')
+				if (sent.key.remoteJid && sent.key.remoteJid !== linksGroupJid) {
+					throw new Error(`WhatsApp returned unexpected target ${sent.key.remoteJid}; expected ${linksGroupJid}`)
+				}
+				sentLinkMessages.set(sent.key.id, {
+					linkId: claim.linkId,
+					serial: claim.displaySerial,
+					targetJid: linksGroupJid,
+				})
+				logger.info(
+					`📤 [${sessionId}] سُلّم الرابط #${claim.displaySerial} لاتصال واتساب وينتظر تأكيد الوصول: msgId=${sent.key.id} | ` +
+					`عبر=${senderSessionId} | الوجهة=${linksGroupJid}`
+				)
+			} catch (err) {
+				await markLinkFailed(claim.linkId, err).catch(markErr => {
+					logger.error(`❌ تعذر تسجيل فشل الرابط ${claim.linkId} في Supabase: ${markErr}`)
+				})
+				logger.error(`❌ [${sessionId}] فشل إرسال الرابط #${claim.displaySerial} عبر [${senderSessionId}]: ${err}`)
+			}
 		}
 	})
 }
