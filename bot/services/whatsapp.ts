@@ -11,7 +11,6 @@ import qrcode from 'qrcode-terminal'
 import path from 'path'
 import PQueue from 'p-queue'
 import { config, normalizeArabic } from '../config'
-import { db } from '../database/database'
 import {
 	claimLinkForSending,
 	isSupabaseLinkStoreConfigured,
@@ -20,21 +19,18 @@ import {
 	parseWhatsAppLink,
 } from '../database/supabaseLinks'
 import type { LinkClaim, LinkIdentity } from '../database/supabaseLinks'
-import { 
-	runSLIEPipeline, 
-	contextBuilder, 
-	processModeratorFeedback, 
-	SLIEMessage 
-} from '../slie'
+import type { SLIEMessage } from '../slie/types'
 
-// إعداد السجلات بنفس الهيئة النظيفة
-const logger = P({
-	level: 'info',
-	transport: {
-		target: 'pino-pretty',
-		options: { colorize: true }
-	}
-})
+// على Render: سجل خفيف بدون pino-pretty حتى لا يأكل رام زيادة
+const logger = process.env.RENDER || process.env.NODE_ENV === 'production'
+	? P({ level: 'info' })
+	: P({
+		level: 'info',
+		transport: {
+			target: 'pino-pretty',
+			options: { colorize: true }
+		}
+	})
 
 // خرائط تخزين معرفات المجموعات لتجنب التكرار (Session ID -> JID)
 const sessionLinksGroupJids = new Map<string, string>()
@@ -144,7 +140,12 @@ export async function startWhatsAppSession(sessionId: string) {
 
 	const authFolder = path.join('sessions', `auth_info_${sessionId}`)
 	const { state, saveCreds } = await useMultiFileAuthState(authFolder)
-	const { version } = await fetchLatestBaileysVersion()
+	const fetched = await fetchLatestBaileysVersion()
+	// واتساب يرفض الإصدارات القديمة بـ 405 قبل ما يطلع QR
+	const minRevision = 1046388543
+	const version: [number, number, number] =
+		fetched.version[2] >= minRevision ? fetched.version : [2, 3000, minRevision]
+	logger.info(`📟 [${sessionId}] إصدار واتساب ويب ${version.join('.')}`)
 
 	// أغلق مقبس قديم قبل فتح جديد (يمنع تصادم الجلسة)
 	const oldSock = activeSockets.get(sessionId)
@@ -374,7 +375,7 @@ export async function startWhatsAppSession(sessionId: string) {
 					rawMessage: msg
 				}
 
-				// استخدام محرك تجميع السياق (Context Builder) المطور للرسائل المتتالية
+				const { contextBuilder } = await import('../slie')
 				contextBuilder.addMessage(sliemMsg, (combinedMsg) => {
 					handleStudentLeadMessage(sock, sessionId, combinedMsg)
 				})
@@ -623,6 +624,8 @@ ${link.url}`
  * معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE المعياري
  */
 async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: SLIEMessage) {
+	const { db } = await import('../database/database')
+	const { runSLIEPipeline } = await import('../slie')
 	const senderSessionId = (config as any).SENDER_SESSION || sessionId
 	const leadsGroupJid = sessionLeadsGroupJids.get(senderSessionId)
 	if (!leadsGroupJid) return
@@ -767,6 +770,8 @@ async function handleModeratorReaction(sock: any, sessionId: string, sentMessage
 
 		if (!isTrueHelp && !isFalseAd) return // تجاهل الرموز الأخرى
 
+		const { db } = await import('../database/database')
+		const { processModeratorFeedback } = await import('../slie')
 		const leads = await db.getLeads()
 		const lead = leads.find(l => l.sentMessageId === sentMessageId)
 

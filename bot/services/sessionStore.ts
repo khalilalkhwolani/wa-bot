@@ -65,12 +65,19 @@ function folderIsEmpty(sessionId: string): boolean {
 export function persistSessionPack(sessionId: string): boolean {
 	const files = packSessionFolder(sessionId)
 	if (!files) return false
+	if (!files['creds.json']) {
+		console.error(`⚠️ تخطي تحزيم [${sessionId}] — لا يوجد creds.json`)
+		return false
+	}
 
 	fs.mkdirSync(SESSION_PACKS_DIR, { recursive: true })
 	const target = packPath(sessionId)
-	fs.writeFileSync(target, JSON.stringify(files), 'utf8')
-	const sizeKb = Math.round(Buffer.byteLength(JSON.stringify(files), 'utf8') / 1024)
-	console.log(`📦 حُفظت حزمة الجلسة [${sessionId}] → ${target} (~${sizeKb}KB)`)
+	const tmp = `${target}.tmp`
+	const payload = JSON.stringify(files)
+	fs.writeFileSync(tmp, payload, 'utf8')
+	fs.renameSync(tmp, target)
+	const sizeKb = Math.round(Buffer.byteLength(payload, 'utf8') / 1024)
+	console.log(`📦 حُفظت حزمة الجلسة [${sessionId}] → ${target} (${Object.keys(files).length} ملف، ~${sizeKb}KB)`)
 	return true
 }
 

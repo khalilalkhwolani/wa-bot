@@ -22,14 +22,17 @@ export const config = {
 	LINK_STORAGE_BACKEND: process.env.LINK_STORAGE_BACKEND || 'supabase',
 	LINK_FORWARDING_DRY_RUN: process.env.LINK_FORWARDING_DRY_RUN !== 'false',
 
-	// الجلسات النشطة
-	SESSIONS: ['account_1', 'account_2', 'account_3'],
+	// الجلسات النشطة (BOT_SESSIONS=account_1 للربط المحلي فقط)
+	SESSIONS: (process.env.BOT_SESSIONS || 'account_1,account_2,account_3')
+		.split(',')
+		.map(s => s.trim())
+		.filter(Boolean),
 
 	// الحساب الذي يرسل لمجموعة العمل (وحيد — لا بديل تلقائي)
-	SENDER_SESSION: 'account_2',
+	SENDER_SESSION: 'account_1',
 
 	// حسابات مراقبة فقط: تقرأ وتلتقط الرسائل ولا يُسمح لها بالإرسال
-	READ_ONLY_SESSIONS: ['account_1', 'account_3'],
+	READ_ONLY_SESSIONS: ['account_2', 'account_3'],
 
 	// إيقاف طلبات الطلاب — الروابط فقط
 	ENABLE_STUDENT_LEADS: false,
