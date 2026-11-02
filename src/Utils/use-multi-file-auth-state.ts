@@ -6,6 +6,10 @@ import type { AuthenticationCreds, AuthenticationState, SignalDataTypeMap } from
 import { initAuthCreds } from './auth-utils'
 import { BufferJSON } from './generics'
 
+const transientWriteErrors = new Set(['UNKNOWN', 'EBUSY', 'EACCES', 'EPERM'])
+
+const wait = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds))
+
 // We need to lock files due to the fact that we are using async functions to read and write files
 // https://github.com/WhiskeySockets/Baileys/issues/794
 // https://github.com/nodejs/node/issues/26338
@@ -40,7 +44,17 @@ export const useMultiFileAuthState = async (
 
 		return mutex.acquire().then(async release => {
 			try {
-				await writeFile(filePath, JSON.stringify(data, BufferJSON.replacer))
+				const serialized = JSON.stringify(data, BufferJSON.replacer)
+				for (let attempt = 1; attempt <= 3; attempt++) {
+					try {
+						await writeFile(filePath, serialized)
+						break
+					} catch (error) {
+						const code = (error as NodeJS.ErrnoException).code
+						if (!transientWriteErrors.has(code || '') || attempt === 3) throw error
+						await wait(attempt * 200)
+					}
+				}
 			} finally {
 				release()
 			}

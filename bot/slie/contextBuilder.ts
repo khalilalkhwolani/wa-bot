@@ -3,9 +3,10 @@ import { SLIEMessage } from './types';
 /**
  * محرك تجميع الرسائل المتتالية (Engine 2: Context Builder)
  */
-class ContextBuilder {
+export class ContextBuilder {
 	private buffers = new Map<string, { messages: SLIEMessage[]; timer: NodeJS.Timeout }>();
-	private debounceMs = 10000; // نافذة التجميع: 10 ثوانٍ
+	// نافذة صغيرة جداً تجمع الردود المتتابعة دون أن تضيع فرصة الطالب.
+	private debounceMs = 3000;
 
 	/**
 	 * إضافة رسالة للمؤقت وتأخير المعالجة لتجميع الرسائل المتتالية
@@ -15,14 +16,20 @@ class ContextBuilder {
 		const existing = this.buffers.get(key);
 
 		if (existing) {
+			// الحسابات المراقبة قد تستقبل نسخة الرسالة نفسها من القروب المشترك.
+			// لا نكررها داخل السياق لأن ذلك قد يرفع درجة الطلب بصورة مصطنعة.
+			if (message.id && existing.messages.some(buffered => buffered.id === message.id)) {
+				return;
+			}
+
 			clearTimeout(existing.timer);
 			existing.messages.push(message);
 
 			const firstMsg = existing.messages[0];
 			const totalDuration = message.timestamp - firstMsg.timestamp;
 
-			// إذا تجاوز التجميع 4 رسائل أو مر أكثر من 30 ثانية على أول رسالة، نقوم بالإرسال فوراً
-			if (existing.messages.length >= 4 || totalDuration >= 30000) {
+			// لا ننتظر سلسلة طويلة من الرسائل: أربع رسائل أو 12 ثانية كحد أقصى.
+			if (existing.messages.length >= 4 || totalDuration >= 12000) {
 				this.flush(key, onFlush);
 			} else {
 				const timer = setTimeout(() => {

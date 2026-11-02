@@ -6,15 +6,17 @@ export const DEFAULT_STUDY_NOUNS = [
 	'واجب', 'واجبات', 'اختبار', 'اختبارات', 'امتحان', 'امتحانات', 'كويز', 'كويزات',
 	'اسايمنت', 'اسايمنتات', 'بروجكت', 'بروجكتات', 'مشروع', 'مشاريع', 'تقرير', 'تقارير',
 	'بحث', 'بحوث', 'تفريغ', 'ملخص', 'ملخصات', 'سلايدات', 'شابتر', 'شباتر', 'سؤال', 'سؤالين',
-	'مسأله', 'مسائل', 'كود', 'أكواد', 'برمجه', 'فيزياء', 'كيمياء', 'رياضيات', 'احصاء',
-	'محاسبه', 'قواعد بيانات', 'شبكات', 'انجليزي', 'تعبير', 'ميد', 'فاينل'
+	'اسئله', 'مسأله', 'مسائل', 'كود', 'أكواد', 'برمجه', 'فيزياء', 'كيمياء', 'رياضيات', 'احصاء',
+	'محاسبه', 'قواعد بيانات', 'شبكات', 'انجليزي', 'تعبير', 'ميد', 'فاينل', 'تكليف', 'تكاليف',
+	'عرض', 'بوربوينت', 'برزنتيشن', 'محاضره', 'محاضرات', 'لاب', 'مشروع تخرج',
+	'ماث', 'ماده', 'ماده دراسيه', 'حل واجب', 'حل الاختبار', 'حل الامتحان'
 ].map(normalizeArabicText);
 
 // أفعال المساعدة الافتراضية
 export const DEFAULT_HELP_VERBS = [
 	'يساعدني', 'تساعدني', 'يساعد', 'تساعد', 'يحل', 'تحل', 'يسوي', 'تسوي', 'يفهم', 'تفهم',
 	'يشرح', 'تشرح', 'يمسك', 'تمسك', 'يضبط', 'تضبط', 'يسعف', 'ينقذ', 'يعرف', 'تعرف',
-	'يقدر', 'تقدر', 'يفزع', 'تفزع', 'يدرس', 'تدرس'
+	'يقدر', 'تقدر', 'يفزع', 'تفزع', 'يدرس', 'تدرس', 'يكتب', 'تكتب', 'يسعفني', 'يفزعني'
 ].map(normalizeArabicText);
 
 // تعبيرات الطلب القوية: هذه تدل بوضوح على طلب مساعدة (تعطي نقاط مباشرة)
@@ -24,6 +26,8 @@ export const DEFAULT_STRONG_HELP_EXPRESSIONS = [
 	'ضايع', 'مش فاهم', 'مو فاهم', 'ما عرفت', 'ما فهمت', 'صعب علي',
 	'مين يحل', 'أحد يحل', 'احد يحل', 'مين يمسك', 'أحد يمسك', 'احد يمسك',
 	'من يحل', 'من يمسك', 'من يساعد', 'من يشرح', 'من يسوي',
+	'احد يساعدني', 'أحد يساعدني', 'مين يساعدني', 'من يساعدني',
+	'يساعدني بحل', 'تساعدني بحل', 'يحل لي', 'يشرح لي', 'يسوي لي',
 	'كيف احل', 'طريقة حل', 'شرح طريقة',
 	'ابغا فزعه', 'ابي فزعه', 'شلو واجب', 'امسكوا واجب', 'يسعفني',
 	'مين يعرف', 'أحد يعرف', 'احد يعرف', 'من يعرف',
@@ -61,17 +65,23 @@ export function classifyIntentLocally(
 	intent: IntentType;
 	localScore: number;
 } {
+	const unique = (values: string[]) => [...new Set(values.map(normalizeArabicText).filter(Boolean))];
+
 	// دمج القواعد الافتراضية مع الديناميكية المستخلصة من قاعدة البيانات
-	const studyNouns = [...DEFAULT_STUDY_NOUNS, ...dynamicRules.filter(r => r.category === 'STUDY_NOUN').map(r => r.key)];
-	const helpVerbs = [...DEFAULT_HELP_VERBS, ...dynamicRules.filter(r => r.category === 'HELP_VERB').map(r => r.key)];
-	const strongHelpExpressions = [...DEFAULT_STRONG_HELP_EXPRESSIONS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight > 0).map(r => r.key)];
-	const weakDesireWords = [...DEFAULT_WEAK_DESIRE_WORDS];
-	const adKeywords = [...DEFAULT_AD_KEYWORDS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight < 0).map(r => r.key)];
+	const studyNouns = unique([...DEFAULT_STUDY_NOUNS, ...dynamicRules.filter(r => r.category === 'STUDY_NOUN').map(r => r.key)]);
+	const helpVerbs = unique([...DEFAULT_HELP_VERBS, ...dynamicRules.filter(r => r.category === 'HELP_VERB').map(r => r.key)]);
+	const strongHelpExpressions = unique([...DEFAULT_STRONG_HELP_EXPRESSIONS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight > 0).map(r => r.key)]);
+	const weakDesireWords = unique([...DEFAULT_WEAK_DESIRE_WORDS]);
+	const adKeywords = unique([...DEFAULT_AD_KEYWORDS, ...dynamicRules.filter(r => r.category === 'AD_KEYWORD' && r.weight < 0).map(r => r.key)]);
 
 	let score = 0;
 
 	const matchedNouns = studyNouns.filter(word => normalizedText.includes(word));
 	const matchedVerbs = helpVerbs.filter(word => normalizedText.includes(word));
+	const wordsOnlyText = normalizedText
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 
 	// 1. التحقق من التعبيرات القوية (فزعه، ساعدوني، محتاج...) → نقاط مباشرة
 	const matchedStrongExpressions = strongHelpExpressions.filter(word => normalizedText.includes(word));
@@ -87,6 +97,31 @@ export function classifyIntentLocally(
 
 	if (matchedNouns.length > 0 && matchedVerbs.length > 0) {
 		score += 25; // نقاط إضافية عند ترابط اسم دراسي مع فعل طلب مساعدة
+	}
+
+	// دليل محلي صارم: المرسل يطلب من شخص تنفيذ عمل أكاديمي محدد.
+	// تسمح الأنماط بكلمات وسطية قليلة (مثل: متخصص / بحل / لي) دون قبول الأسئلة العامة.
+	const gap = '(?:\\s+\\S+){0,4}\\s+';
+	const seeker = '(?:ابي|ابغا|ابغى|اشتي|محتاج|محتاجه|احتاج|اريد)';
+	const person = '(?:احد|أحد|شخص|واحد|مين|من)';
+	const execVerb = '(?:يحل(?:لي|ها|هن|ه)?|تحل(?:لي|ها|هن|ه)?|يشرح(?:لي|ها|هن|ه)?|تشرح(?:لي|ها|هن|ه)?|يسوي(?:لي|ها|هن|ه)?|تسوي(?:لي|ها|هن|ه)?|يمسك(?:لي|ها|هن|ه)?|تمسك(?:لي|ها|هن|ه)?|يساعد(?:ني|ها|هن|ه)?|تساعد(?:ني|ها|هن|ه)?|يضبط(?:لي|ها|هن|ه)?|تضبط(?:لي|ها|هن|ه)?|يكتب(?:لي|ها|هن|ه)?|تكتب(?:لي|ها|هن|ه)?|يسعف(?:ني|ها|هن|ه)?|يفزع(?:ني|ها|هن|ه)?)';
+	const serviceNoun = '(?:حل|شرح|كتابه|تصميم|برمجه|تلخيص|مساعده)';
+	const explicitExecutionRequestPatterns = [
+		new RegExp(`(?:^|\\s)${seeker}${gap}${person}${gap}${execVerb}(?:\\s|$)`, 'u'),
+		new RegExp(`(?:^|\\s)${seeker}${gap}${serviceNoun}(?:\\s|$)`, 'u'),
+		new RegExp(`(?:^|\\s)${person}${gap}${execVerb}(?:\\s|$)`, 'u'),
+		new RegExp(`(?:^|\\s)${execVerb}${gap}(?:حل|شرح|واجب|مشروع|اختبار|امتحان|كويز|اسايمنت|تكليف|بحث|تقرير)(?:\\s|$)`, 'u'),
+	];
+	const looksLikeScheduleOrOpinion =
+		/(?:^|\s)(?:متى|موعد|وقت|كم باقي|وش رايكم|رايك|كيف كان|هل فيه)(?:\s|$)/u.test(wordsOnlyText) &&
+		!explicitExecutionRequestPatterns.some(pattern => pattern.test(wordsOnlyText));
+	if (
+		matchedNouns.length > 0 &&
+		!looksLikeScheduleOrOpinion &&
+		explicitExecutionRequestPatterns.some(pattern => pattern.test(wordsOnlyText))
+	) {
+		// بلوغ 85 يعني تمرير الطلب الصريح فقط، ثم تبقى خصومات الإعلان والبصمة مطبقة أدناه.
+		score = Math.max(score, 85);
 	}
 
 	// 2. خصم النقاط للتعبيرات السلبية (الإعلانية والمروجين)
@@ -106,12 +141,12 @@ export function classifyIntentLocally(
 	}
 
 	// التحقق من عروض مروجي الخدمات والشركات الخدمية
-	const promoterTriggers = [
+	const promoterTriggers = unique([
 		'الي يبي', 'اللي يبي', 'من يبي', 'الي يحتاج', 'اللي يحتاج', 'من يحتاج',
 		'يسوي واجبات', 'يسوي بحوث', 'يسوي مشاريع', 'يسوي تكاليف',
 		'اقدر اجهز', 'اقدر احل', 'اقدر اسوي', 'شغلي مضمون', 'شغلي ثقه', 'ضمان الدرجه',
 		'فل مارك', 'درجه كامله', 'الدرجه الكامله', 'يبشر بالخير', 'يبشر بالدرجه', 'وتواصل خاص'
-	].map(normalizeArabicText);
+	]);
 	const matchedPromoter = promoterTriggers.filter(word => normalizedText.includes(word));
 	if (matchedPromoter.length > 0) {
 		score -= 50; // خصم نقاط قاطع لمنع المروجين تماماً

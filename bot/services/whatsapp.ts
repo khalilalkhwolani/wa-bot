@@ -1,4 +1,5 @@
 import { Boom } from '@hapi/boom'
+import fs from 'fs'
 import makeWASocket, { 
 	DisconnectReason, 
 	fetchLatestBaileysVersion, 
@@ -19,7 +20,16 @@ import {
 	parseWhatsAppLink,
 } from '../database/supabaseLinks'
 import type { LinkClaim, LinkIdentity } from '../database/supabaseLinks'
+import {
+	claimStudentLead,
+	hasRecentDeliveredStudentLead,
+	isSupabaseStudentLeadStoreConfigured,
+	markStudentLeadFailed,
+	markStudentLeadSent,
+	type StudentLeadDecision,
+} from '../database/supabaseStudentLeads'
 import type { SLIEMessage } from '../slie/types'
+import { persistSessionPack } from './sessionStore'
 
 // على Render: سجل خفيف بدون pino-pretty حتى لا يأكل رام زيادة
 const logger = process.env.RENDER || process.env.NODE_ENV === 'production'
@@ -47,7 +57,8 @@ const botStartupTime = Date.now()
 
 // طابور عالمي واحد للروابط: يمنع سباق الترقيم بين حسابات المراقبة
 const linksQueue = new PQueue({ concurrency: 1 })
-const sessionLeadsQueues = new Map<string, PQueue>()
+// طابور واحد لكل الحسابات: لا يوجد سباق على رقم طلب ولا إرسال مكرر.
+const studentLeadsQueue = new PQueue({ concurrency: 1 })
 
 // واتساب قد يعيد حدث notify نفسه أكثر من مرة؛ نمنع إعادة معالجة نفس الرسالة محليًا.
 const recentlyProcessedMessages = new Map<string, number>()
@@ -107,9 +118,10 @@ async function claimLinkWithRecovery(
 /** منع تشغيل/إعادة اتصال مزدوج لنفس الحساب */
 const startingSessions = new Set<string>()
 const reconnectScheduled = new Set<string>()
+const reconnectAttempts = new Map<string, number>()
 
 function isReadOnlySession(sessionId: string): boolean {
-	return ((config as any).READ_ONLY_SESSIONS || []).includes(sessionId)
+	return sessionId !== config.SENDER_SESSION
 }
 
 function jidUser(jid: unknown): string {
@@ -133,10 +145,6 @@ export async function startWhatsAppSession(sessionId: string) {
 
 	try {
 	logger.info(`🔌 جاري تهيئة الاتصال للحساب: [${sessionId}]...`)
-
-	// إنشاء طوابير إرسال مستقلة
-	const leadsQueue = new PQueue({ concurrency: 1 })
-	sessionLeadsQueues.set(sessionId, leadsQueue)
 
 	const authFolder = path.join('sessions', `auth_info_${sessionId}`)
 	const { state, saveCreds } = await useMultiFileAuthState(authFolder)
@@ -177,8 +185,12 @@ export async function startWhatsAppSession(sessionId: string) {
 		defaultQueryTimeoutMs: 60_000,
 	})
 
-	// حفظ حالة المصادقة عند التحديث
-	sock.ev.on('creds.update', saveCreds)
+	// حفظ ملفات الاعتماد عند تحديث المفاتيح أو تسجيل الدخول بالـ QR
+	sock.ev.on('creds.update', () => {
+		saveCreds().catch(error => {
+			logger.warn(`⚠️ تعذر حفظ جلسة الاعتماد للحساب [${sessionId}] مؤقتًا: ${error}`)
+		})
+	})
 
 	// متابعة تأكيدات واتساب للروابط المرسلة، بدل الاكتفاء بإنشاء معرف الرسالة.
 	sock.ev.on('messages.update', (updates: any[]) => {
@@ -236,6 +248,7 @@ export async function startWhatsAppSession(sessionId: string) {
 		if (connection === 'close') {
 			activeSockets.delete(sessionId)
 			verifiedSenderTargets.delete(`${sessionId}|${config.TARGET_LINKS_GROUP}`)
+			verifiedSenderTargets.delete(`${sessionId}|${config.TARGET_LEADS_GROUP}`)
 			const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
 			const shouldReconnect = statusCode !== DisconnectReason.loggedOut
 			logger.error(
@@ -253,21 +266,42 @@ export async function startWhatsAppSession(sessionId: string) {
 			if (shouldReconnect) {
 				if (reconnectScheduled.has(sessionId)) return
 				reconnectScheduled.add(sessionId)
-				logger.info(`🔄 جاري محاولة إعادة الاتصال خلال 8 ثوانٍ للحساب [${sessionId}]...`)
+				const attempt = (reconnectAttempts.get(sessionId) || 0) + 1
+				reconnectAttempts.set(sessionId, attempt)
+				// تدرج مع اهتزاز خفيف يمنع ضرب خوادم واتساب باتصالات متزامنة.
+				const retryDelayMs = Math.min(60_000, 8_000 * 2 ** Math.min(attempt - 1, 3)) + Math.floor(Math.random() * 2_000)
+				logger.info(`🔄 إعادة الاتصال للحساب [${sessionId}] خلال ${Math.round(retryDelayMs / 1000)} ثوانٍ (محاولة ${attempt})...`)
 				setTimeout(() => {
 					reconnectScheduled.delete(sessionId)
 					startWhatsAppSession(sessionId).catch(err => {
 						logger.error(`❌ فشل إعادة تشغيل [${sessionId}]: ${err}`)
 					})
-				}, 8000)
+				}, retryDelayMs)
 			} else {
 				logger.error(`⚠️ تم تسجيل الخروج للحساب [${sessionId}]. يرجى إزالة المجلد ${authFolder} وإعادة التشغيل.`)
+				// كتابة ملف marker لإعلام القائمة التفاعلية بأن الجلسة مُلغاة رغم بقاء ملفاتها
+				try {
+					fs.writeFileSync(
+						path.join(authFolder, '.invalidated'),
+						JSON.stringify({ reason: 'loggedOut', at: new Date().toISOString() })
+					)
+				} catch { /* تجاهل أخطاء الكتابة */ }
 			}
 		} else if (connection === 'open') {
 			reconnectScheduled.delete(sessionId)
+			reconnectAttempts.delete(sessionId)
 			activeSockets.set(sessionId, sock)
 			const mode = isReadOnlySession(sessionId) ? ' (قراءة فقط)' : ''
 			logger.info(`✅ تم فتح الاتصال بنجاح للحساب [${sessionId}]${mode}!`)
+			if (config.SESSION_BACKUP_ON_CONNECT) {
+				try {
+					persistSessionPack(sessionId)
+				} catch (e) {
+					logger.warn(`⚠️ تعذر حفظ حزمة جلسة [${sessionId}] بعد الاتصال: ${e}`)
+				}
+			} else {
+				logger.info(`🛡️ [${sessionId}] تم تخطي تحزيم الجلسة أثناء الاتصال لحماية الذاكرة`)
+			}
 			lookupGroupJids(sock, sessionId).catch(err => {
 				logger.warn(`⚠️ [${sessionId}] تنبيه جلب المجموعات: ${err}`)
 			})
@@ -351,8 +385,11 @@ export async function startWhatsAppSession(sessionId: string) {
 				continue
 			}
 
-			// مسار طلبات الطلاب متوقف حالياً
+			// مسار طلبات الطلاب يعمل فقط عند تفعيله صراحة من الإعدادات.
 			if (!(config as any).ENABLE_STUDENT_LEADS) {
+				continue
+			}
+			if (config.STUDENT_LEADS_MODE === 'disabled') {
 				continue
 			}
 
@@ -424,6 +461,28 @@ async function lookupGroupJids(sock: any, sessionId: string) {
 	if (config.TARGET_LEADS_GROUP && config.TARGET_LEADS_GROUP.endsWith('@g.us')) {
 		sessionLeadsGroupJids.set(sessionId, config.TARGET_LEADS_GROUP)
 		logger.info(`🎯 تم تعيين مجموعة الطلاب مباشرة بالمعرف الفريد (JID): ${config.TARGET_LEADS_GROUP}`)
+		if (sessionId === config.SENDER_SESSION) {
+			try {
+				const metadata = await sock.groupMetadata(config.TARGET_LEADS_GROUP)
+				const ownUsers = new Set([jidUser(sock.user?.id), jidUser(sock.user?.lid)].filter(Boolean))
+				const ownParticipant = metadata?.participants?.find((participant: any) =>
+					[participant.id, participant.lid, participant.phoneNumber].some(jid => ownUsers.has(jidUser(jid)))
+				)
+				const isAdmin = Boolean(
+					ownParticipant?.isAdmin || ownParticipant?.isSuperAdmin ||
+					ownParticipant?.admin === 'admin' || ownParticipant?.admin === 'superadmin'
+				)
+				const canSend = Boolean(ownParticipant) && (!metadata?.announce || isAdmin)
+				logger.info(
+					`📨 مجموعة إرسال الطلبات الفعلية: "${metadata?.subject || 'غير معروف'}" (${config.TARGET_LEADS_GROUP}) | ` +
+					`عضو=${Boolean(ownParticipant)} مشرف=${isAdmin}`
+				)
+				if (!canSend) throw new Error(`حساب الإرسال [${sessionId}] ليس مخولاً بالإرسال داخل مجموعة الطلبات`)
+				verifiedSenderTargets.add(`${sessionId}|${config.TARGET_LEADS_GROUP}`)
+			} catch (error) {
+				logger.error(`❌ تعذر على حساب الإرسال التحقق من مجموعة الطلبات ${config.TARGET_LEADS_GROUP}: ${error}`)
+			}
+		}
 	}
 
 	const linksIsJid = !!(config.TARGET_LINKS_GROUP && config.TARGET_LINKS_GROUP.endsWith('@g.us'))
@@ -624,41 +683,22 @@ ${link.url}`
  * معالجة طلبات مساعدة الطلاب عبر أنبوب SLIE المعياري
  */
 async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: SLIEMessage) {
-	const { db } = await import('../database/database')
 	const { runSLIEPipeline } = await import('../slie')
 	const senderSessionId = (config as any).SENDER_SESSION || sessionId
-	const leadsGroupJid = sessionLeadsGroupJids.get(senderSessionId)
-	if (!leadsGroupJid) return
-
-	const queue = sessionLeadsQueues.get(sessionId)
-	if (!queue) return
-
 	const participantJid = sliemMsg.participant
 	const phone = participantJid.split('@')[0].split(':')[0]
 
-	// 1. التحقق من عدم تكرار الفرصة في قاعدة البيانات المحلية (Duplicate Check)
-	if (await db.hasLead(phone, sliemMsg.text)) {
-		logger.info(`🚫 [${sessionId}] تم تجاهل طلب مكرر للطالب [${sliemMsg.pushName}]`)
-		return
-	}
-
-	queue.add(async () => {
-		logger.info(`🤖 [${sessionId}] جاري تمرير الرسالة عبر أنبوب SLIE المعياري...`)
-		
-		// 2. تشغيل الأنبوب المعياري بالكامل لـ SLIE (Engines 1-9)
-		const pipelineResult = await runSLIEPipeline(sliemMsg)
-
-		if (pipelineResult.decision === 'REJECT') {
-			logger.info(`🚫 [${sessionId}] استبعاد SLIE: ${pipelineResult.analysis.reason}`)
+	void studentLeadsQueue.add(async () => {
+		if (!isSupabaseStudentLeadStoreConfigured()) {
+			logger.error(`⏸️ [${sessionId}] قاعدة Supabase لطلبات الطلاب غير مضبوطة — لا حفظ ولا إرسال`)
 			return
 		}
+		logger.info(`🤖 [${sessionId}] جاري تمرير الرسالة عبر أنبوب SLIE المعياري...`)
 
+		const pipelineResult = await runSLIEPipeline(sliemMsg)
 		const analysis = pipelineResult.analysis
-		let isLid = false
 		let resolvedParticipantJid = participantJid
-		let chatLink = ''
 
-		// 3. فك معرف LID إذا كان مخفياً
 		if (resolvedParticipantJid && resolvedParticipantJid.includes('@lid')) {
 			try {
 				const lidUser = resolvedParticipantJid.split('@')[0].split(':')[0]
@@ -673,86 +713,109 @@ async function handleStudentLeadMessage(sock: any, sessionId: string, sliemMsg: 
 			}
 		}
 
-		if (resolvedParticipantJid) {
-			if (resolvedParticipantJid.includes('@lid')) {
-				isLid = true
-				chatLink = '🔒 (رقم مخفي بسبب إعدادات الخصوصية في مجتمعات واتساب)'
-			} else {
-				const resolvedPhone = resolvedParticipantJid.split('@')[0].split(':')[0]
-				chatLink = `https://wa.me/${resolvedPhone}`
-			}
-		} else {
-			chatLink = '⚠️ (تعذر استخراج رقم الهاتف)'
+		let chatLink = ''
+		const resolvedPhone = resolvedParticipantJid && !resolvedParticipantJid.includes('@lid')
+			? resolvedParticipantJid.split('@')[0].split(':')[0]
+			: ''
+		if (resolvedPhone) {
+			chatLink = `https://wa.me/${resolvedPhone}`
 		}
 
-		let originalGroup = 'مجموعة عامة'
 		let groupLink = ''
-		let groupJid = ''
+		let groupName = ''
 		if (sliemMsg.remoteJid && sliemMsg.remoteJid.endsWith('@g.us')) {
-			groupJid = sliemMsg.remoteJid.replace('@', ' [at] ')
-			try {
-				const meta = await sock.groupMetadata(sliemMsg.remoteJid)
-				originalGroup = meta.subject || 'مجموعة عامة'
-			} catch {
-				originalGroup = 'مجموعة واتساب'
-			}
-
 			try {
 				const code = await sock.groupInviteCode(sliemMsg.remoteJid)
 				if (code) {
 					groupLink = `https://chat.whatsapp.com/${code}`
 				}
 			} catch {
-				// البوت ليس مشرفاً
+				// البوت ليس مشرفاً أو حدث خطأ في جلب الرابط
+			}
+			try {
+				const meta = await sock.groupMetadata(sliemMsg.remoteJid)
+				if (meta?.subject) groupName = meta.subject
+			} catch {
+				// تعذّر جلب بيانات المجموعة
 			}
 		}
 
-		// 4. حفظ الفرصة في قاعدة البيانات المحلية (Persistence)
-		const savedLead = await db.insertLead({
-			studentPhone: phone || 'غير معروف',
-			studentName: sliemMsg.pushName || 'غير مسجل',
-			originalGroup,
+		const deliveryEnabled = config.STUDENT_LEADS_MODE === 'send' && config.STUDENT_LEADS_SEND_ENABLED
+		let decision: StudentLeadDecision = pipelineResult.decision === 'PASS' && deliveryEnabled
+			? 'accepted'
+			: pipelineResult.decision === 'PASS'
+				? 'review'
+			: analysis.category.includes('مراجعة داخلية')
+				? 'review'
+				: 'rejected'
+		let decisionReason = analysis.reason
+		if (decision === 'accepted') {
+			const recentlyDelivered = await hasRecentDeliveredStudentLead({
+				studentPhone: resolvedPhone || undefined,
+				sourceSenderJid: resolvedParticipantJid || participantJid,
+				cooldownHours: config.STUDENT_LEADS_SENDER_COOLDOWN_HOURS,
+			})
+			if (recentlyDelivered) {
+				decision = 'rejected'
+				decisionReason = `منع تكرار: سبق إرسال طلب لهذا الرقم خلال ${config.STUDENT_LEADS_SENDER_COOLDOWN_HOURS} ساعة`
+				logger.info(`⏭️ [${sessionId}] منع طلب إضافي لنفس الرقم خلال نافذة التهدئة`)
+			}
+		}
+
+		const claim = await claimStudentLead({
+			decision,
+			sessionId,
+			messageId: sliemMsg.id,
+			sourceChatJid: sliemMsg.remoteJid,
+			sourceSenderJid: resolvedParticipantJid || participantJid,
+			sourceGroupInviteUrl: groupLink || undefined,
+			studentPhone: resolvedPhone || phone || undefined,
+			studentName: sliemMsg.pushName || undefined,
 			messageContent: sliemMsg.text,
+			quotedContent: sliemMsg.quotedText,
 			classification: analysis.classification,
 			subject: analysis.subject,
+			confidence: analysis.confidence,
 			score: analysis.leadScore,
-			confidence: analysis.confidence
+			reason: decisionReason,
+			observedAt: new Date(sliemMsg.timestamp).toISOString(),
 		})
 
-		// 5. صياغة الرسالة التنبيهية التلقائية المبسطة المنسقة كما طلب المستخدم باستخدام الأيقونات فقط
-		const leads = await db.getLeads()
-		const leadCount = leads.filter(l => l.subject !== 'رابط مجموعة').length
-		const nextLeadNumber = leadCount + 1
-
-		const alertMessage = `📝 *#${nextLeadNumber}*
-
-💬 ${sliemMsg.text}${sliemMsg.quotedText ? `\n*(الرد على):* "${sliemMsg.quotedText}"` : ''}
-
-👤 ${chatLink}
-
-${groupLink ? `👥 ${groupLink}` : ''}`
-
-		const sleepTime = Math.floor(Math.random() * 3000) + 2000
-		await new Promise(resolve => setTimeout(resolve, sleepTime))
-
-		// جلب مقبس الإرسال المخصص
-		const configuredSenderSock = activeSockets.get(senderSessionId)
-		if (!configuredSenderSock && isReadOnlySession(sessionId)) {
-			logger.warn(`⏸️ [${sessionId}] الحساب للقراءة فقط والمرسل [${senderSessionId}] غير متصل — تم إلغاء إرسال التنبيه`)
+		if (!claim.shouldDeliver) {
+			logger.info(`⏭️ [${sessionId}] طلب محفوظ بلا إرسال: الحالة=${claim.currentStatus}`)
 			return
 		}
-		const senderSock = configuredSenderSock || sock
+
+		if (!deliveryEnabled) {
+			logger.info(`🧪 [${sessionId}] طلب #${claim.displaySerial} محفوظ في Supabase — وضع التجربة، لم يُرسل`)
+			return
+		}
+
+		const leadsGroupJid = sessionLeadsGroupJids.get(senderSessionId)
+		const senderSock = activeSockets.get(senderSessionId)
+		if (!leadsGroupJid || !senderSock || !verifiedSenderTargets.has(`${senderSessionId}|${leadsGroupJid}`)) {
+			const reason = `حساب الإرسال الوحيد [${senderSessionId}] أو مجموعة الطلبات غير جاهزة`
+			await markStudentLeadFailed(claim.leadId, reason)
+			logger.warn(`⏸️ [${sessionId}] ${reason} — لم يستخدم النظام أي حساب بديل`)
+			return
+		}
+
+		// الرسالة الظاهرة للمجموعة: الترقيم، اسم المجموعة المصدر، النص، وروابط المصدر.
+		const sourceLines = [chatLink, groupLink].filter(Boolean)
+		const groupHeader = groupName ? `📌 المجموعة: ${groupName}\n` : ''
+		const alertMessage = `#${claim.displaySerial}\n${groupHeader}\n${sliemMsg.text}${sliemMsg.quotedText ? `\n\n${sliemMsg.quotedText}` : ''}${sourceLines.length ? `\n\n${sourceLines.join('\n')}` : ''}`
 
 		try {
 			const sent = await senderSock.sendMessage(leadsGroupJid, { text: alertMessage })
-			if (sent?.key?.id) {
-				// ربط معرف رسالة التنبيه بالـ Lead للاستماع للتغذية الراجعة
-				await db.updateLeadSentMessageId(savedLead.id, sent.key.id)
-			}
-			logger.info(`✅ [${sessionId}] تم توجيه الـ Lead بنجاح بالمعرف: ${savedLead.id} عبر [${senderSessionId}]`)
+			if (!sent?.key?.id) throw new Error('WhatsApp did not return a message id')
+			await markStudentLeadSent(claim.leadId, sent.key.id)
+			logger.info(`✅ [${sessionId}] أُرسل طلب الطالب #${claim.displaySerial} عبر [${senderSessionId}]`)
 		} catch (err) {
-			logger.error(`❌ [${sessionId}] فشل إرسال تنبيه الطالب عبر [${senderSessionId}]: ${err}`)
+			await markStudentLeadFailed(claim.leadId, err).catch(() => {})
+			logger.error(`❌ [${sessionId}] فشل إرسال طلب الطالب #${claim.displaySerial} عبر [${senderSessionId}]: ${err}`)
 		}
+	}).catch(error => {
+		logger.error(`❌ [${sessionId}] فشل مسار طلبات الطلاب: ${error}`)
 	})
 }
 

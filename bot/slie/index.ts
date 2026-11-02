@@ -83,7 +83,7 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 		};
 	}
 
-	// 6. منطقة الشك: استدعاء الذكاء الاصطناعي (Gemini)
+	// 6. منطقة الشك: استدعاء الذكاء الاصطناعي (Groq)
 	console.log(`🤖 [SLIE] قرار: منطقة رمادية → إرسال للذكاء الاصطناعي...`);
 	try {
 		const aiResult = await analyzeGrayZoneWithAI(message);
@@ -107,6 +107,25 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 			};
 		}
 
+		// حتى لو قال النموذج إنها مساعدة، لا إرسال عند ثقة ضعيفة أو دليل محلي ضعيف.
+		// تحفظ الحالة للمراجعة، منعاً لتمرير أي طلب بسيط أو نتيجة AI مترددة.
+		if (aiResult.confidence < 0.9 || localScore < 25) {
+			console.log(`⏸️ [AI] طلب محتمل لكن الدليل غير كافٍ للإرسال التلقائي`);
+			console.log(`${'═'.repeat(60)}\n`);
+			return {
+				decision: 'REJECT',
+				analysis: {
+					classification: 'UNKNOWN',
+					confidence: aiResult.confidence,
+					subject: aiResult.subject,
+					category: 'مراجعة داخلية بسبب انخفاض الثقة',
+					urgency: aiResult.urgency,
+					leadScore: aiResult.leadScore,
+					reason: `لم يرسل: ثقة AI=${aiResult.confidence.toFixed(2)} والنقاط المحلية=${localScore}`
+				}
+			};
+		}
+
 		// حساب جودة الـ Lead الأكاديمي
 		const qualityScore = calculateLeadQualityScore(message.text, aiResult.subject);
 		console.log(`✅ [AI] قرار: تمرير (PASS) | LeadScore=${qualityScore}`);
@@ -125,24 +144,21 @@ export async function runSLIEPipeline(message: SLIEMessage): Promise<{
 			}
 		};
 	} catch (err) {
-		// نظام الـ Fallback عند تعطل الـ AI كلياً
+		// عند تعطل الذكاء الاصطناعي لا نقبل المنطقة الرمادية تلقائياً.
+		// تحفظ لاحقاً للمراجعة فقط؛ هذا يمنع وصول الإعلانات على أنها طلبات.
 		const qualityScore = calculateLeadQualityScore(message.text, 'غير محدد');
-		// خفضنا العتبة من 45 إلى 20 لأن الـ AI معطل ولا يجب حرمان الطلاب الحقيقيين
-		const isLikelyHelp = localScore >= 20;
-		console.log(`⚠️  [SLIE] فشل كلا AI | النقاط المحلية=${localScore} → Fallback: ${isLikelyHelp ? 'PASS' : 'REJECT'}`);
+		console.log(`⚠️  [SLIE] فشل الذكاء الاصطناعي | النقاط المحلية=${localScore} → حفظ للمراجعة دون إرسال`);
 		console.log(`${'═'.repeat(60)}\n`);
 		return {
-			decision: isLikelyHelp ? 'PASS' : 'REJECT',
+			decision: 'REJECT',
 			analysis: {
-				classification: isLikelyHelp ? 'ASK_HELP' : 'DISCUSSION',
-				confidence: 0.5,
-				subject: isLikelyHelp ? 'غير محدد' : 'معلق بسبب انقطاع الخدمة',
-				category: isLikelyHelp ? 'Fallback محلي' : 'Fallback مرفوض',
+				classification: 'UNKNOWN',
+				confidence: 0,
+				subject: 'غير محدد',
+				category: 'مراجعة داخلية بسبب تعطل المصنف',
 				urgency: 'Medium',
 				leadScore: qualityScore,
-				reason: isLikelyHelp
-					? `تم التمرير احتياطياً لوجود مؤشرات طلب مساعدة (نقاط: ${localScore}) - الذكاء الاصطناعي غير متاح حالياً`
-					: `تم الرفض لعدم كفاية المؤشرات (نقاط: ${localScore}) - الذكاء الاصطناعي غير متاح حالياً`
+				reason: `المصنف غير متاح؛ لم يُرسل شيء تلقائياً (النقاط المحلية: ${localScore})`
 			}
 		};
 	}

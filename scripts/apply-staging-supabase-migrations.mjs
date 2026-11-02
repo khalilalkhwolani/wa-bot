@@ -50,8 +50,14 @@ try {
 	await verifyRecovery(client)
 
 	await applySqlFile(client, 'supabase/migrations/003_fix_claim_function_pgcrypto_path.sql', 'pgcrypto path fix 003')
+	await applySqlFile(client, 'supabase/migrations/004_advance_legacy_counter_floor.sql', 'legacy counter floor 004')
+	await applySqlFile(client, 'supabase/migrations/005_block_existing_links_from_resend.sql', 'existing link resend block 005')
+	await applySqlFile(client, 'supabase/migrations/006_retry_failed_keep_existing_blocked.sql', 'failed-link retry policy 006')
 	await applySqlFile(client, 'supabase/verification/verify_claim_flow.sql', 'claim-flow verification')
-	await verifyRecovery(client)
+	await applySqlFile(client, 'supabase/migrations/007_student_leads_safe_outbox.sql', 'student lead safe outbox 007')
+	await verifyStudentLeadSchema(client)
+	await applySqlFile(client, 'supabase/verification/verify_student_lead_claim_flow.sql', 'student lead claim-flow verification')
+	await verifyRecovery(client, 1365)
 	console.log('STAGING_MIGRATION_COMPLETE')
 } finally {
 	await client.end().catch(() => {})
@@ -83,22 +89,41 @@ async function verifySchema(client) {
 	if (tables.rowCount !== 3 || functions.rowCount !== 3) {
 		throw new Error(`Schema verification failed: ${tables.rowCount} tables, ${functions.rowCount} functions`)
 	}
-	console.log('Schema verified: 3 tables and 3 sending functions.')
+	console.log('Link schema verified: 3 tables and 3 sending functions.')
 }
 
-async function verifyRecovery(client) {
+async function verifyStudentLeadSchema(client) {
+	const tables = await client.query(`
+		select tablename from pg_tables
+		where schemaname = 'public' and tablename in ('student_leads', 'student_lead_occurrences')
+	`)
+	const functions = await client.query(`
+		select proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+		where n.nspname = 'public' and proname in ('claim_student_lead', 'mark_student_lead_failed', 'mark_student_lead_sent')
+	`)
+	if (tables.rowCount !== 2 || functions.rowCount !== 3) {
+		throw new Error(`Student lead schema verification failed: ${tables.rowCount} tables, ${functions.rowCount} functions`)
+	}
+	console.log('Student lead schema verified: 2 tables and 3 outbox functions.')
+}
+
+async function verifyRecovery(client, minimumCounter = 1156) {
 	const actual = await readRecoveryTotals(client)
 	const expected = expectedRecoveryTotals()
 	for (const [key, value] of Object.entries(expected)) {
+		if (key === 'counter_value') continue
 		if (actual[key] !== value) throw new Error(`Recovery verification failed for ${key}: ${actual[key]} != ${value}`)
 	}
+	if (actual.counter_value < minimumCounter) throw new Error(`Recovery verification failed for counter: ${actual.counter_value} < ${minimumCounter}`)
 	console.log(`Recovery verified: ${actual.unique_links} links, ${actual.occurrences} occurrences, counter ${actual.counter_value}.`)
 }
 
 async function recoveryIsComplete(client) {
 	try {
 		const actual = await readRecoveryTotals(client)
-		return Object.entries(expectedRecoveryTotals()).every(([key, value]) => actual[key] === value)
+		return Object.entries(expectedRecoveryTotals()).every(([key, value]) =>
+			key === 'counter_value' ? actual[key] >= value : actual[key] === value
+		)
 	} catch {
 		return false
 	}

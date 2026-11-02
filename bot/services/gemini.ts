@@ -11,42 +11,40 @@ export interface AIAnalysisResult {
 	reason: string
 }
 
-async function tryMiniMax(prompt: string): Promise<AIAnalysisResult> {
-	const apiKey = config.MINIMAX_API_KEY
-	if (!apiKey) {
-		throw new Error('MiniMax API Key is not configured')
+const GROQ_TIMEOUT_MS = 20_000
+const VALID_CLASSIFICATIONS = new Set(['HELP_REQUEST', 'SERVICE_AD', 'DISCUSSION', 'OTHER'])
+const VALID_URGENCIES = new Set(['High', 'Medium', 'Low'])
+
+function parseAndValidateAIResult(raw: unknown): AIAnalysisResult {
+	if (!raw || typeof raw !== 'object') {
+		throw new Error('AI response is not a JSON object')
 	}
-
-	const url = 'https://inference.dahl.global/v1/chat/completions'
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: { 
-			'Content-Type': 'application/json',
-			'Authorization': `Bearer ${apiKey}`
-		},
-		body: JSON.stringify({
-			model: 'MiniMaxAI/MiniMax-M2.7',
-			messages: [
-				{ role: 'user', content: prompt }
-			]
-		})
-	})
-
-	if (!response.ok) {
-		const errText = await response.text().catch(() => '')
-		throw new Error(`MiniMax API returned status ${response.status}: ${errText}`)
+	const data = raw as Record<string, unknown>
+	const classification = String(data.classification || '')
+	if (!VALID_CLASSIFICATIONS.has(classification)) {
+		throw new Error(`Invalid AI classification: ${classification}`)
 	}
-
-	const data: any = await response.json()
-	let jsonText = data.choices?.[0]?.message?.content
-	if (!jsonText) throw new Error('Empty response from MiniMax')
-
-	// إزالة وسوم التفكير <think>...</think> التي قد يرجعها النموذج لتفادي فشل الـ JSON.parse
-	if (jsonText.includes('</think>')) {
-		jsonText = jsonText.split('</think>').pop() || ''
+	const confidence = Number(data.confidence)
+	if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+		throw new Error(`Invalid AI confidence: ${data.confidence}`)
 	}
-
-	return JSON.parse(jsonText.trim())
+	const urgency = String(data.urgency || 'Medium')
+	if (!VALID_URGENCIES.has(urgency)) {
+		throw new Error(`Invalid AI urgency: ${data.urgency}`)
+	}
+	const leadScore = Number(data.leadScore ?? 0)
+	if (!Number.isFinite(leadScore)) {
+		throw new Error(`Invalid AI leadScore: ${data.leadScore}`)
+	}
+	return {
+		classification: classification as AIAnalysisResult['classification'],
+		confidence,
+		subject: String(data.subject || 'غير محدد').slice(0, 200),
+		category: String(data.category || 'غير محدد').slice(0, 200),
+		urgency: urgency as AIAnalysisResult['urgency'],
+		leadScore: Math.max(0, Math.min(100, Math.round(leadScore))),
+		reason: String(data.reason || '').slice(0, 500),
+	}
 }
 
 async function tryGroq(prompt: string): Promise<AIAnalysisResult> {
@@ -55,6 +53,7 @@ async function tryGroq(prompt: string): Promise<AIAnalysisResult> {
 		throw new Error('Groq API Key is not configured')
 	}
 
+	const model = config.GROQ_MODEL || 'qwen/qwen3.8-27b'
 	const url = 'https://api.groq.com/openai/v1/chat/completions'
 	const response = await fetch(url, {
 		method: 'POST',
@@ -63,57 +62,45 @@ async function tryGroq(prompt: string): Promise<AIAnalysisResult> {
 			'Authorization': `Bearer ${apiKey}`
 		},
 		body: JSON.stringify({
-			model: 'llama-3.3-70b-versatile',
+			model,
 			messages: [{ role: 'user', content: prompt }],
 			response_format: { type: 'json_object' },
-			temperature: 0.1
-		})
+			temperature: 0.1,
+			max_tokens: 400,
+		}),
+		signal: AbortSignal.timeout(GROQ_TIMEOUT_MS),
 	})
 
 	if (!response.ok) {
 		const errText = await response.text().catch(() => '')
-		throw new Error(`Groq API returned status ${response.status}: ${errText}`)
+		throw new Error(`Groq API returned status ${response.status}: ${errText.slice(0, 300)}`)
 	}
 
 	const data: any = await response.json()
-	const jsonText = data.choices?.[0]?.message?.content
+	let jsonText = data.choices?.[0]?.message?.content
 	if (!jsonText) throw new Error('Empty response from Groq')
 
-	return JSON.parse(jsonText.trim())
-}
-
-async function tryGemini(prompt: string): Promise<AIAnalysisResult> {
-	const apiKey = config.GEMINI_API_KEY
-	if (!apiKey) {
-		throw new Error('Gemini API Key is not configured')
+	// بعض نماذج Qwen تُرجع وسوم تفكير قبل JSON
+	if (jsonText.includes('</think>')) {
+		jsonText = jsonText.split('</think>').pop() || ''
+	}
+	const fenced = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/)
+	if (fenced?.[1]) {
+		jsonText = fenced[1]
 	}
 
-	const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			contents: [{ parts: [{ text: prompt }] }],
-			generationConfig: {
-				responseMimeType: 'application/json'
-			}
-		})
-	})
-
-	if (!response.ok) {
-		const errText = await response.text().catch(() => '')
-		throw new Error(`Gemini API returned status ${response.status}: ${errText}`)
+	let parsed: unknown
+	try {
+		parsed = JSON.parse(jsonText.trim())
+	} catch {
+		throw new Error('Groq returned invalid JSON')
 	}
-
-	const data: any = await response.json()
-	const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text
-	if (!jsonText) throw new Error('Empty response from Gemini')
-
-	return JSON.parse(jsonText.trim())
+	return parseAndValidateAIResult(parsed)
 }
 
 /**
- * خدمة الاتصال بالذكاء الاصطناعي مع دعم سلاسل بديلة (MiniMax -> Gemini -> Fallback محلي)
+ * مصنف الحالات الرمادية عبر Groq فقط.
+ * عند الفشل يُرمى الخطأ إلى SLIE ليحفظ الحالة للمراجعة دون إرسال تلقائي.
  */
 export async function analyzeMessageWithAI(text: string, quotedContext?: string): Promise<AIAnalysisResult> {
 	const prompt = `أنت مصنّف رسائل دقيق جداً. مهمتك الوحيدة: هل هذه الرسالة طلب خدمة أكاديمية حقيقي يمكن بيعه كخدمة (حل واجب، شرح مادة، حل اختبار، مشروع تخرج، كتابة بحث) أم لا؟
@@ -132,6 +119,7 @@ export async function analyzeMessageWithAI(text: string, quotedContext?: string)
 - "ابغى خطة الطالبات حق تخصص علوم التغذية" ← HELP_REQUEST (طلب خطة دراسية)
 - "تكفون احد يشرح لي قواعد بيانات" ← HELP_REQUEST (طلب شرح مادة)
 - "محتاج حل اسايمنت احصاء ضروري" ← HELP_REQUEST (طلب حل واجب)
+- "احد يساعدني بحل الواجب" ← HELP_REQUEST (طلب مساعدة أكاديمية صريحة)
 
 === أمثلة على DISCUSSION (ليست طلبات مساعدة) - مهم جداً ===
 - "ابي بريك بين كل تسميعه والثانيه" ← DISCUSSION (دردشة عن جدول شخصي)
@@ -160,38 +148,12 @@ export async function analyzeMessageWithAI(text: string, quotedContext?: string)
 {"classification":"HELP_REQUEST"|"SERVICE_AD"|"DISCUSSION"|"OTHER","confidence":number,"subject":string,"category":string,"urgency":"High"|"Medium"|"Low","leadScore":number,"reason":string}
 `
 
-	// 1. محاولة الاتصال بـ Groq (الأسرع والأوفر)
+	console.log(`⚡ [AI] جاري فحص الرسالة عبر Groq (${config.GROQ_MODEL || 'qwen/qwen3.8-27b'})...`)
 	try {
-		console.log('⚡ [AI] جاري فحص الرسالة عبر Groq (llama-3.3-70b)...')
 		return await tryGroq(prompt)
 	} catch (groqErr: any) {
-		console.warn(`⚠️ [AI] فشل Groq: ${groqErr.message || groqErr}`)
-
-		// 2. محاولة MiniMax في حال فشل Groq
-		try {
-			console.log('🔄 [AI] محاولة بديلة عبر MiniMax...')
-			return await tryMiniMax(prompt)
-		} catch (minimaxErr: any) {
-			console.warn(`⚠️ [AI] فشل MiniMax: ${minimaxErr.message || minimaxErr}`)
-
-			// 3. محاولة Gemini كآخر بديل
-			try {
-				console.log('🔄 [AI] محاولة أخيرة عبر Gemini...')
-				return await tryGemini(prompt)
-			} catch (geminiErr: any) {
-				console.error(`❌ [AI] فشل كل الخدمات: ${geminiErr.message || geminiErr}`)
-
-				// 4. الرجوع للتصفية المحلية الاحتياطية
-				return {
-					classification: 'HELP_REQUEST',
-					confidence: 0.50,
-					subject: 'خطأ اتصال بالذكاء الاصطناعي',
-					category: 'غير محدد',
-					urgency: 'Medium',
-					leadScore: 50,
-					reason: 'فشل الاتصال بكل خدمات الذكاء الاصطناعي، تم التمرير احتياطياً'
-				}
-			}
-		}
+		console.error(`❌ [AI] فشل Groq: ${groqErr.message || groqErr}`)
+		// فشل الذكاء الاصطناعي لا يجوز أن يتحول إلى قبول تلقائي.
+		throw new Error('مصنف Groq غير متاح')
 	}
 }
